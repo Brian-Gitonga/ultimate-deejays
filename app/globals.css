@@ -1,26 +1,288 @@
 @import "tailwindcss";
 
+/* Theme is driven by data-theme on <html> (set before paint in layout.tsx). */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+/* Course cards switch to their horizontal layout inside a [data-view="list"] container. */
+@custom-variant view-list (&:where([data-view="list"] *));
+
 :root {
   --background: #ffffff;
-  --foreground: #171717;
+  --foreground: #0a0a0a;
+  --muted-foreground: #737373;
+  --border: #e5e5e5;
+  --card: #ffffff;
+  --muted: #f4f4f5;
+  --cream: #fffdf6;
+  --brand: #00a76f;
+  --brand-deep: #007867;
+  --accent-blue: #1f57bf;
+  --accent-yellow: #f8c525;
+  --accent-indigo: #4f39f6;
+  --accent-rose: #ee1f57;
+  --accent-amber: #ffab00;
+  --glass: rgb(255 255 255 / 0.72);
+  --glass-border: rgb(255 255 255 / 0.95);
+  --glow-violet: #f0f0ff;
+  --glow-mint: #e8f8f1;
+  --grid-line: rgb(0 118 103 / 0.07);
+
+  /* Pastel card fills (categories) */
+  --tint-violet: #f8f7ff;
+  --tint-mint: #f5faf8;
+  --tint-cream: #fffcf5;
+  --tint-rose: #fef5f7;
+
+  /* Stat card fills; their icon discs keep one color in both themes */
+  --stat-blue: #eaf0f5;
+  --stat-cream: #fffaef;
+  --stat-green: #edf4f2;
+  --stat-periwinkle: #f1f5ff;
+}
+
+[data-theme="dark"] {
+  --background: #0a0a0a;
+  --foreground: #fafafa;
+  --muted-foreground: #a3a3a3;
+  --border: #262626;
+  --card: #141414;
+  --muted: #1f1f1f;
+  --cream: #0f0f0f;
+  --accent-indigo: #8b7dff;
+  --accent-rose: #ff5c87;
+  --glass: rgb(23 23 23 / 0.6);
+  --glass-border: rgb(255 255 255 / 0.12);
+  --glow-violet: rgb(99 102 241 / 0.12);
+  --glow-mint: rgb(0 167 111 / 0.14);
+  --grid-line: rgb(255 255 255 / 0.045);
+
+  --tint-violet: rgb(99 102 241 / 0.1);
+  --tint-mint: rgb(0 167 111 / 0.1);
+  --tint-cream: rgb(245 158 11 / 0.08);
+  --tint-rose: rgb(244 63 94 / 0.09);
+
+  --stat-blue: rgb(52 105 154 / 0.2);
+  --stat-cream: rgb(255 203 97 / 0.1);
+  --stat-green: rgb(74 151 130 / 0.16);
+  --stat-periwinkle: rgb(121 158 255 / 0.12);
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-card: var(--card);
+  --color-muted: var(--muted);
+  --color-cream: var(--cream);
+  --color-brand: var(--brand);
+  --color-brand-deep: var(--brand-deep);
+  --color-accent-blue: var(--accent-blue);
+  --color-accent-yellow: var(--accent-yellow);
+  --color-accent-indigo: var(--accent-indigo);
+  --color-accent-rose: var(--accent-rose);
+  --color-accent-amber: var(--accent-amber);
+  --color-glass: var(--glass);
+  --color-glass-border: var(--glass-border);
+  --color-tint-violet: var(--tint-violet);
+  --color-tint-mint: var(--tint-mint);
+  --color-tint-cream: var(--tint-cream);
+  --color-tint-rose: var(--tint-rose);
+  --color-stat-blue: var(--stat-blue);
+  --color-stat-cream: var(--stat-cream);
+  --color-stat-green: var(--stat-green);
+  --color-stat-periwinkle: var(--stat-periwinkle);
+  --font-sans: var(--font-inter);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+/* Gentle idle motion for illustrations (applied with motion-safe:, so reduced-motion users see a still image). */
+@theme {
+  --animate-float: float 6s ease-in-out infinite;
+  --animate-eq: eq 1.1s ease-in-out infinite;
+
+  @keyframes float {
+    0%,
+    100% {
+      transform: translateY(0);
+    }
+    50% {
+      transform: translateY(-5%);
+    }
+  }
+
+  @keyframes eq {
+    0%,
+    100% {
+      transform: scaleY(0.35);
+    }
+    50% {
+      transform: scaleY(1);
+    }
+  }
+}
+
+/*
+ * Responsive scale. Every size in the UI is in rem, so the root font size
+ * scales the whole design at once:
+ * - phones and tablets keep the browser default (16px) for readable text;
+ * - laptops and typical desktops (1024–1919px, which includes 1920px screens
+ *   at 125% Windows scaling) render at 90%, the density that fits them best;
+ * - large monitors (1920px+) go back to 100%, with more margin instead.
+ * Percentages respect a visitor's own browser font-size setting.
+ */
+html {
+  font-size: 100%;
+  /* Keeps in-page anchors clear of the sticky header. */
+  scroll-padding-top: 6rem;
+}
+
+@media (min-width: 64rem) and (max-width: 119.99rem) {
+  html {
+    font-size: 90%;
+  }
+}
+
+/*
+ * The page frame, following the common max-width-plus-gutter pattern: content
+ * never exceeds 80rem, and the side margin grows with the screen
+ * (20px on phones, 24px on tablets, 32px on desktops, scaled with the root size).
+ */
+@utility site-container {
+  width: 100%;
+  max-width: 84rem;
+  margin-inline: auto;
+  padding-inline: 1.25rem;
+
+  @media (width >= 40rem) {
+    padding-inline: 1.5rem;
+  }
+
+  @media (width >= 64rem) {
+    padding-inline: 2rem;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
   }
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+}
+
+/* Soft violet wash on the left, mint on the right — sits behind the header and hero. */
+.hero-backdrop {
+  background:
+    radial-gradient(55% 60% at 36% 34%, var(--glow-violet), transparent 72%),
+    radial-gradient(42% 58% at 90% 60%, var(--glow-mint), transparent 72%),
+    var(--background);
+}
+
+/*
+ * Clips the cut-out photo to the green circle, plus a narrow band at the top
+ * so the head can rise above the circle's edge.
+ * The wrapper is as wide as the circle; --circle-height is the circle's
+ * diameter as a share of the wrapper's height.
+ */
+.hero-person-mask {
+  --circle-height: 86.4%;
+  mask-image:
+    radial-gradient(circle closest-side, #000 calc(100% - 0.5px), transparent 100%),
+    linear-gradient(#000 0 0);
+  mask-size:
+    100% var(--circle-height),
+    60% 40%;
+  mask-position:
+    bottom center,
+    top center;
+  mask-repeat: no-repeat;
+}
+
+/* Faint square grid behind the course carousels. */
+.grid-lines {
+  background-image:
+    linear-gradient(to right, var(--grid-line) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--grid-line) 1px, transparent 1px);
+  background-size: 28px 28px;
+}
+
+/* Fades a section backdrop out at its top and bottom so bands blend into the page. */
+.fade-y {
+  mask-image: linear-gradient(to bottom, transparent, #000 16%, #000 84%, transparent);
+}
+
+.glow-mint-violet {
+  background:
+    radial-gradient(38% 55% at 10% 72%, var(--glow-mint), transparent 72%),
+    radial-gradient(36% 50% at 88% 22%, var(--glow-violet), transparent 72%);
+}
+
+.glow-violet-mint {
+  background:
+    radial-gradient(38% 55% at 12% 70%, var(--glow-violet), transparent 72%),
+    radial-gradient(36% 50% at 86% 20%, var(--glow-mint), transparent 72%);
+}
+
+/* Mint on the left fading to violet on the right, like the reference FAQ band. */
+.glow-faq {
+  background:
+    radial-gradient(50% 80% at 0% 50%, var(--glow-mint), transparent 75%),
+    radial-gradient(50% 80% at 100% 40%, var(--glow-violet), transparent 75%);
+}
+
+/* Cream title band for inner pages, with a mint glow top-right like the reference. */
+.page-header-backdrop {
+  background:
+    radial-gradient(22% 75% at 88% 38%, var(--glow-mint), transparent 75%),
+    var(--cream);
+}
+
+/* Mint glow behind the text column, violet under the photos (About success section). */
+.glow-success {
+  background:
+    radial-gradient(26% 60% at 14% 42%, var(--glow-mint), transparent 72%),
+    radial-gradient(30% 50% at 80% 88%, var(--glow-violet), transparent 72%);
+}
+
+/* Organic blob used to crop the FAQ photo. */
+.blob-mask {
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'%3E%3Cpath d='M148 28c30 16 46 50 42 84-4 36-26 66-62 78-34 11-74 2-96-24C10 140 4 104 16 72 28 40 58 16 94 12c22-2 36 6 54 16Z'/%3E%3C/svg%3E");
+  mask-size: 100% 100%;
+  mask-repeat: no-repeat;
+}
+
+.no-scrollbar {
+  scrollbar-width: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/*
+ * Fades content up as it scrolls into view. Uses scroll-driven animations, so
+ * browsers without support (or with reduced motion) simply show the content.
+ */
+@keyframes reveal-up {
+  from {
+    opacity: 0;
+    transform: translateY(32px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  @supports (animation-timeline: view()) {
+    .reveal {
+      animation: reveal-up linear both;
+      animation-timeline: view();
+      animation-range: entry 0% entry 45%;
+    }
+  }
 }
