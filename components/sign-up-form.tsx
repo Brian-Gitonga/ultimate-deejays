@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useActionState, useRef, useState } from "react";
 import { signUp } from "@/app/(auth)/actions";
-import { initialAuthState, PASSWORD_MIN_LENGTH, passwordStrength } from "@/lib/auth";
+import { HOME_AFTER_AUTH, initialAuthState, PASSWORD_MIN_LENGTH, passwordStrength } from "@/lib/auth";
 import {
   FormMessage,
   GoogleButton,
@@ -17,7 +17,7 @@ import {
 const strengthLabels = ["", "Weak", "Fair", "Good", "Strong"];
 const strengthColors = ["", "bg-red-500", "bg-accent-amber", "bg-accent-blue", "bg-brand"];
 
-export function SignUpForm() {
+export function SignUpForm({ next }: { next: string }) {
   const [state, formAction, pending] = useActionState(signUp, initialAuthState);
   const formRef = useRef<HTMLFormElement>(null);
   const { errorFor, markEdited } = useFieldErrors(state, formRef);
@@ -34,6 +34,7 @@ export function SignUpForm() {
   return (
     <form ref={formRef} action={formAction} noValidate className="space-y-5">
       <FormMessage state={state} />
+      <input type="hidden" name="next" value={next} />
 
       <TextField
         name="name"
@@ -120,7 +121,7 @@ export function SignUpForm() {
       <p className="text-center text-[0.9375rem] text-muted-foreground">
         Already have an account?{" "}
         <Link
-          href="/login"
+          href={next === HOME_AFTER_AUTH ? "/login" : `/login?next=${encodeURIComponent(next)}`}
           className="font-semibold text-foreground underline decoration-foreground/25 underline-offset-4 transition hover:text-brand hover:decoration-brand"
         >
           Log in

@@ -1,11 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
+import { useMoney } from "./money-context";
 
 type Point = { month: string; value: number | null };
 
-const money = (n: number) => `$${n.toLocaleString("en-US")}`;
-const compact = (n: number) => (n >= 1000 ? `$${(n / 1000).toFixed(n % 1000 ? 1 : 0)}k` : `$${n}`);
 
 /*
  * Single-series monthly revenue line. One hue (brand), 2px line, soft area,
@@ -20,6 +19,7 @@ function niceStep(max: number) {
 }
 
 export function RevenueChart({ data, year, label = "revenue" }: { data: Point[]; year: number; label?: string }) {
+  const { whole: money, compact } = useMoney();
   const wrapRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
   const [active, setActive] = useState<number | null>(null);

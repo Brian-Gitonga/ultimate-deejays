@@ -2,7 +2,8 @@
 
 import { MoonIcon, SunIcon } from "./icons";
 
-export function ThemeToggle() {
+/** `className` sets the button's size and shape (default: a 40px rounded square). */
+export function ThemeToggle({ className = "size-10 rounded-lg" }: { className?: string }) {
   function toggle() {
     const root = document.documentElement;
     const next = root.getAttribute("data-theme") === "dark" ? "light" : "dark";
@@ -18,7 +19,7 @@ export function ThemeToggle() {
       type="button"
       onClick={toggle}
       aria-label="Toggle dark mode"
-      className="inline-flex size-10 items-center justify-center rounded-lg text-foreground hover:bg-foreground/5"
+      className={`inline-flex shrink-0 items-center justify-center text-foreground hover:bg-foreground/5 ${className}`}
     >
       <SunIcon className="size-[1.375rem] dark:hidden" />
       <MoonIcon className="hidden size-5 dark:block" />

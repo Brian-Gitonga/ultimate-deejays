@@ -33,7 +33,7 @@ export function PromoLibrary({ code, assets, copy, colors }: { code: string; ass
   return (
     <>
       <Panel title="Banners, posts & logos" description="Download a file and add your referral link where you post it. Banners also have embed code with your link built in.">
-        <div role="tablist" aria-label="File type" className="no-scrollbar -mx-1 flex gap-1 overflow-x-auto px-1" data-lenis-prevent-horizontal>
+        <div role="tablist" aria-label="File type" className="no-scrollbar -mx-1 flex gap-1 overflow-x-auto px-1">
           {tabs.map((t) => {
             const count = t.key === "all" ? assets.length : assets.filter((a) => a.kind === t.key).length;
             return (

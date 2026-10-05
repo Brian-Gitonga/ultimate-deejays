@@ -29,7 +29,7 @@ export function CoursesSection({
       <div className="site-container">
         <SectionHeading id={`${id}-title`} eyebrow={eyebrow} title={title} description={description} />
 
-        <div className="reveal mt-10 lg:mt-12">
+        <div className="mt-10 lg:mt-12">
           <Carousel
             label={title}
             slideClassName="basis-[85%] sm:basis-[calc((100%-1.5rem)/2)] lg:basis-[calc((100%-3rem)/3)] xl:basis-[calc((100%-4.5rem)/4)]"

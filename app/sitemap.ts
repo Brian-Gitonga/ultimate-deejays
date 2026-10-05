@@ -1,14 +1,14 @@
 import type { MetadataRoute } from "next";
-import { challenges } from "@/lib/challenges";
-import { courses, posts } from "@/lib/content";
 import { courseCategories, type CourseCategory } from "@/lib/course-taxonomy";
+import { getPublicChallenges } from "@/lib/db/challenges";
+import { getPublishedCourses } from "@/lib/db/courses";
+import { getLivePosts } from "@/lib/db/posts";
+import { getStoreResources } from "@/lib/db/store";
 import { siteUrl } from "@/lib/site";
 
-/*
- * Every indexable page, including each course page;
- * with a backend, read the same lists from it.
- */
-export default function sitemap(): MetadataRoute.Sitemap {
+/* Every indexable page, including each published course, live post, challenge and store resource. */
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+  const [courses, posts, challenges, resources] = await Promise.all([getPublishedCourses(), getLivePosts(), getPublicChallenges(), getStoreResources()]);
   const url = (path: string) => new URL(path, siteUrl).toString();
   const newestCourse = courses.map((c) => c.publishedAt).sort().at(-1);
   const newestPost = posts.map((p) => p.publishedAt).sort().at(-1);
@@ -39,6 +39,8 @@ export default function sitemap(): MetadataRoute.Sitemap {
     { url: url("/pricing"), changeFrequency: "monthly", priority: 0.8 },
     { url: url("/challenges"), changeFrequency: "weekly", priority: 0.7 },
     ...challenges.map((c) => ({ url: url(`/challenges/${c.slug}`), lastModified: c.opens, changeFrequency: "weekly" as const, priority: 0.5 })),
+    { url: url("/store"), lastModified: resources.map((r) => r.publishedAt).sort().at(-1), changeFrequency: "weekly", priority: 0.7 },
+    ...resources.map((r) => ({ url: url(`/store/${r.slug}`), lastModified: r.publishedAt, changeFrequency: "monthly" as const, priority: 0.5 })),
     { url: url("/about"), changeFrequency: "monthly", priority: 0.5 },
   ];
 }

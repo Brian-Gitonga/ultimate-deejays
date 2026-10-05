@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
-import { connection } from "next/server";
 import { CopyButton } from "@/components/affiliate/copy-button";
 import { ReferralStatusBadge } from "@/components/affiliate/referral-status";
 import { ArrowRightIcon, DownloadIcon, LightbulbIcon, LinkIcon, PlusIcon, TrendUpIcon, UsersIcon, WalletIcon } from "@/components/icons";
@@ -9,11 +8,13 @@ import { RevenueChart } from "@/components/revenue-chart";
 import { PlanBadge } from "@/components/studio/student-manager";
 import { Kpi, Panel, primaryButton, secondaryButton } from "@/components/studio/ui";
 import { nextPayoutDate, prettyUrl, referralUrl } from "@/lib/affiliate-links";
-import { getAffiliatePortal, promoAssets } from "@/lib/affiliate-portal";
+import { promoAssets } from "@/lib/affiliate-portal";
+import { requireAffiliate } from "@/lib/dal";
+import { getAffiliatePortal } from "@/lib/db/affiliate-portal";
+import { moneyFormatter } from "@/lib/money";
 
 export const metadata: Metadata = { title: { absolute: "Dashboard | Affiliate | Ultimate Deejays" } };
 
-const usd = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
 const date = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
 const longDate = new Intl.DateTimeFormat("en-US", { month: "long", day: "numeric", timeZone: "UTC" });
 const MONTH_NAMES: Record<string, string> = { Jan: "January", Feb: "February", Mar: "March", Apr: "April", May: "May", Jun: "June", Jul: "July", Aug: "August", Sep: "September", Oct: "October", Nov: "November", Dec: "December" };
@@ -34,16 +35,17 @@ function Delta({ now, before, label }: { now: number; before: number; label: str
 }
 
 export default async function AffiliateDashboardPage() {
-  await connection();
+  const viewer = await requireAffiliate();
   const today = new Date().toISOString().slice(0, 10);
-  const { affiliate: a, monthly, referrals, links, balance, program } = getAffiliatePortal(today);
+  const { affiliate: a, monthly, referrals, links, balance, program, year } = await getAffiliatePortal(viewer);
+  const money = moneyFormatter(program.currency);
 
   const months = monthly.filter((m) => m.clicks !== null);
   const latest = months.at(-1)!;
   const previous = months.at(-2);
   const vs = previous ? `vs ${MONTH_NAMES[previous.month]}` : "";
   const link = referralUrl(a.code);
-  const firstName = a.name.split(" ")[0];
+  const firstName = (viewer.profile.fullName || a.name).split(" ")[0];
   const topLinks = [...links].sort((x, y) => y.earned - x.earned).slice(0, 3);
   const funnel = [
     { label: "Clicks", value: a.clicks },
@@ -83,7 +85,8 @@ export default async function AffiliateDashboardPage() {
                 <CopyButton text={link} label="Copy link" className="h-11 border-white/0 bg-white px-4 text-neutral-900 hover:bg-white/90" />
               </div>
               <p className="mt-3 text-sm text-white/70">
-                Anyone who buys a plan within {program.cookieDays} days of clicking earns you <span className="font-semibold text-white">{a.commission}%</span>. Code at checkout:{" "}
+                Anyone who buys a plan within {program.cookieDays} days of clicking earns you <span className="font-semibold text-white">{a.commission}%</span>
+                {a.customerDiscount ? <>, and they get {a.customerDiscount}% off</> : null}. Code at checkout:{" "}
                 <span className="rounded bg-white/10 px-1.5 py-0.5 font-mono text-white">{a.code}</span>
               </p>
             </div>
@@ -105,17 +108,17 @@ export default async function AffiliateDashboardPage() {
           <Kpi icon={LinkIcon} label={`Clicks in ${latest.month}`} value={(latest.clicks ?? 0).toLocaleString("en-US")} note={<Delta now={latest.clicks ?? 0} before={previous?.clicks ?? 0} label={vs} />} />
           <Kpi icon={UsersIcon} label={`Sign-ups in ${latest.month}`} value={String(latest.signups ?? 0)} note={<Delta now={latest.signups ?? 0} before={previous?.signups ?? 0} label={vs} />} />
           <Kpi icon={TrendUpIcon} label={`Paid sales in ${latest.month}`} value={String(latest.sales ?? 0)} note={<Delta now={latest.sales ?? 0} before={previous?.sales ?? 0} label={vs} />} />
-          <Kpi icon={WalletIcon} label={`Earned in ${latest.month}`} value={usd.format(latest.earnings ?? 0)} note={<Delta now={latest.earnings ?? 0} before={previous?.earnings ?? 0} label={vs} />} />
+          <Kpi icon={WalletIcon} label={`Earned in ${latest.month}`} value={money(latest.earnings ?? 0)} note={<Delta now={latest.earnings ?? 0} before={previous?.earnings ?? 0} label={vs} />} />
         </ul>
 
         <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
-          <Panel title="Your earnings" description="Commission earned each month, 2026">
-            <p className="text-3xl font-bold tracking-tight text-foreground tabular-nums">{usd.format(balance.lifetime)}</p>
+          <Panel title="Your earnings" description={`Commission earned each month, ${year}`}>
+            <p className="text-3xl font-bold tracking-tight text-foreground tabular-nums">{money(balance.lifetime)}</p>
             <p className="mt-1 text-sm text-muted-foreground">
-              Earned since you joined on {longDate.format(new Date(a.approvedAt!))}, from {a.sales} paid sales
+              Earned{a.approvedAt ? ` since you joined on ${longDate.format(new Date(a.approvedAt))}` : ""}, from {a.sales} paid {a.sales === 1 ? "sale" : "sales"}
             </p>
             <div className="mt-6">
-              <RevenueChart data={monthly.map((m) => ({ month: m.month, value: m.earnings }))} year={2026} label="commission" />
+              <RevenueChart data={monthly.map((m) => ({ month: m.month, value: m.earnings }))} year={year} label="commission" />
             </div>
           </Panel>
 
@@ -123,19 +126,19 @@ export default async function AffiliateDashboardPage() {
             <div className="relative isolate overflow-hidden rounded-2xl bg-brand-deep p-6 text-white">
               <div aria-hidden="true" className="absolute -right-12 -bottom-16 -z-10 size-48 rounded-full bg-white/10 blur-2xl" />
               <p className="text-sm text-white/75">Owed to you</p>
-              <p className="mt-1 text-[2rem] font-bold tracking-tight tabular-nums">{usd.format(balance.owed)}</p>
+              <p className="mt-1 text-[2rem] font-bold tracking-tight tabular-nums">{money(balance.owed)}</p>
               <dl className="mt-3 space-y-1.5 text-sm">
                 <div className="flex justify-between gap-4">
                   <dt className="text-white/75">Cleared, ready to pay</dt>
-                  <dd className="font-medium tabular-nums">{usd.format(balance.approved)}</dd>
+                  <dd className="font-medium tabular-nums">{money(balance.approved)}</dd>
                 </div>
                 <div className="flex justify-between gap-4">
                   <dt className="text-white/75">Pending (refund window)</dt>
-                  <dd className="font-medium tabular-nums">{usd.format(balance.pending)}</dd>
+                  <dd className="font-medium tabular-nums">{money(balance.pending)}</dd>
                 </div>
               </dl>
               <p className="mt-4 text-xs text-white/70">
-                Next payout on {longDate.format(new Date(nextPayoutDate(today)))} for cleared commission over ${program.minPayout}.
+                Next payout on {longDate.format(new Date(nextPayoutDate(today)))} for cleared commission over {money(program.minPayout)}.
               </p>
               <Link href="/affiliate/payouts" className="mt-4 inline-flex h-10 w-full items-center justify-center rounded-lg bg-white text-sm font-semibold text-neutral-900 hover:bg-white/90">
                 Payouts & payment method
@@ -159,7 +162,7 @@ export default async function AffiliateDashboardPage() {
                       </span>
                     </div>
                     <div className="mt-1.5 h-2 rounded-full bg-foreground/[0.06]">
-                      <div className="h-full rounded-full bg-brand" style={{ width: `${Math.max(2, (f.value / funnel[0].value) * 100)}%`, opacity: 1 - i * 0.2 }} />
+                      <div className="h-full rounded-full bg-brand" style={{ width: `${funnel[0].value ? Math.max(2, (f.value / funnel[0].value) * 100) : 2}%`, opacity: 1 - i * 0.2 }} />
                     </div>
                   </li>
                 ))}
@@ -177,6 +180,11 @@ export default async function AffiliateDashboardPage() {
               </Link>
             }
           >
+            {!referrals.length && (
+              <p className="text-sm text-muted-foreground">
+                No sales yet. When someone buys through your link or code, it shows here straight away (first name and initial only).
+              </p>
+            )}
             <ul className="-my-3 divide-y divide-border">
               {referrals.slice(0, 5).map((r) => (
                 <li key={r.id} className="flex items-center gap-3 py-3">
@@ -193,7 +201,7 @@ export default async function AffiliateDashboardPage() {
                     </div>
                   </div>
                   <div className="flex flex-col items-end gap-1">
-                    <span className="text-sm font-semibold text-foreground tabular-nums">+{usd.format(r.commission)}</span>
+                    <span className="text-sm font-semibold text-foreground tabular-nums">+{money(r.commission)}</span>
                     <ReferralStatusBadge status={r.status} />
                   </div>
                 </li>
@@ -210,6 +218,11 @@ export default async function AffiliateDashboardPage() {
               </Link>
             }
           >
+            {!topLinks.length && (
+              <p className="text-sm text-muted-foreground">
+                No tracking links yet. <Link href="/affiliate/links" className="font-medium text-brand hover:underline">Make one</Link> for each place you post to see which sells best.
+              </p>
+            )}
             <ul className="space-y-3">
               {topLinks.map((l, i) => (
                 <li key={l.id} className="flex items-center gap-3 rounded-xl border border-border p-3">
@@ -220,7 +233,7 @@ export default async function AffiliateDashboardPage() {
                       {l.clicks.toLocaleString("en-US")} clicks · {l.sales} sales
                     </p>
                   </div>
-                  <span className="text-sm font-semibold text-foreground tabular-nums">{usd.format(l.earned)}</span>
+                  <span className="text-sm font-semibold text-foreground tabular-nums">{money(l.earned)}</span>
                 </li>
               ))}
             </ul>

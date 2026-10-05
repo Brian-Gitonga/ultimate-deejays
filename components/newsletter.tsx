@@ -6,7 +6,7 @@ const subscribers = [1, 2, 3, 4, 5].map((n) => `/images/students/student-${n}.jp
 export function Newsletter() {
   return (
     <section aria-labelledby="newsletter-title" className="site-container pb-16 lg:pb-24">
-      <div className="reveal relative isolate overflow-hidden rounded-[1.75rem] bg-brand-deep px-6 py-12 text-center sm:px-12 lg:rounded-[2.5rem] lg:py-16">
+      <div className="relative isolate overflow-hidden rounded-[1.75rem] bg-brand-deep px-6 py-12 text-center sm:px-12 lg:rounded-[2.5rem] lg:py-16">
         <DoodlePattern />
         <div
           aria-hidden="true"
@@ -35,7 +35,7 @@ export function Newsletter() {
               />
             ))}
           </div>
-          <p className="text-sm font-medium text-white sm:text-base">+2,000 DJs already subscribed</p>
+          <p className="text-sm font-medium text-white sm:text-base">Free weekly tips. Unsubscribe any time.</p>
         </div>
       </div>
     </section>

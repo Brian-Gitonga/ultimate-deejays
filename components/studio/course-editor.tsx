@@ -3,13 +3,14 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { deleteCourse, saveCourse } from "@/app/(studio)/studio/courses/actions";
 import { courseLevels, formatDuration } from "@/lib/course-taxonomy";
 import { youtubeId } from "@/lib/curriculum";
-import { checklist, languages, lessonsOf, slugify, totalSeconds, type EditorStep, type StudioCourse } from "@/lib/studio-courses";
-import { useStudioCourses } from "@/lib/studio-store";
+import { checklist, languages, lessonsOf, slugify, totalSeconds, type EditorStep, type InstructorOption, type StudioCourse } from "@/lib/studio-courses";
+import { runAction } from "@/lib/studio-store";
 import { ArrowUpRightIcon, CheckIcon, ChevronLeftIcon, LessonIcon, UsersIcon } from "../icons";
-import { AccessPicker, CategorySelect, ThumbnailPicker } from "./course-fields";
+import { AccessPicker, CategorySelect, InstructorSelect, ThumbnailPicker } from "./course-fields";
 import { CurriculumBuilder } from "./curriculum-builder";
 import { DescriptionEditor } from "./description-editor";
 import { ListEditor } from "./list-editor";
@@ -24,37 +25,23 @@ const steps: { id: EditorStep; group: string; label: string }[] = [
   { id: "publish", group: "Publish your course", label: "Review & publish" },
 ];
 
-export function CourseEditor({ seed, courseId }: { seed: StudioCourse[]; courseId: string }) {
-  const { courses } = useStudioCourses(seed);
-  const course = courses.find((c) => c.id === courseId);
+const unreachable = "We couldn't reach the server. Your changes are kept here; try again in a moment.";
 
-  if (!course) {
-    return (
-      <Panel>
-        <div className="py-10 text-center">
-          <p className="text-lg font-semibold text-foreground">Course not found</p>
-          <p className="mt-1 text-sm text-muted-foreground">It may have been deleted, or it was created in another browser.</p>
-          <Link href="/studio/courses" className={`${primaryButton} mt-5`}>
-            Back to courses
-          </Link>
-        </div>
-      </Panel>
-    );
-  }
-
-  return <Editor key={course.id} seed={seed} initial={course} />;
-}
-
-function Editor({ seed, initial }: { seed: StudioCourse[]; initial: StudioCourse }) {
+/*
+ * The course editor. Changes autosave to the database a moment after you stop
+ * typing (and on Ctrl/Cmd+S); saves run one at a time so they can't overtake
+ * each other.
+ */
+export function CourseEditor({ course, instructors, takenSlugs }: { course: StudioCourse; instructors: InstructorOption[]; takenSlugs: string[] }) {
   const router = useRouter();
   const params = useSearchParams();
-  const { courses, save, remove } = useStudioCourses(seed);
-  const [draft, setDraft] = useState(initial);
+  const [draft, setDraft] = useState(course);
   const [step, setStepState] = useState<EditorStep>(() => (steps.find((s) => s.id === params.get("step"))?.id ?? "learners"));
   const [saveState, setSaveState] = useState<"saved" | "saving" | "error">("saved");
   const [saveError, setSaveError] = useState("");
   const [welcome, setWelcome] = useState(params.get("created") === "1");
-  const [savedJson, setSavedJson] = useState(() => JSON.stringify(initial));
+  const [savedJson, setSavedJson] = useState(() => JSON.stringify(course));
+  const queue = useRef<Promise<unknown>>(Promise.resolve());
 
   const items = checklist(draft);
   const doneCount = items.filter((i) => i.done).length;
@@ -65,31 +52,33 @@ function Editor({ seed, initial }: { seed: StudioCourse[]; initial: StudioCourse
   function setStep(next: EditorStep) {
     setStepState(next);
     window.history.replaceState(null, "", `?step=${next}`);
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    window.scrollTo({ top: 0 });
   }
 
   const set = <K extends keyof StudioCourse>(key: K, value: StudioCourse[K]) => setDraft((d) => ({ ...d, [key]: value }));
 
-  function persist(next = draft) {
-    try {
-      const saved = save(next);
+  function persist(next = draft): Promise<StudioCourse | null> {
+    setSaveState("saving");
+    const run = queue.current.then(async () => {
+      const result = await saveCourse(next).catch(() => ({ ok: false as const, error: unreachable }));
+      if (!result.ok) {
+        setSaveState("error");
+        setSaveError(result.error);
+        return null;
+      }
       setSavedJson(JSON.stringify(next));
       setSaveState("saved");
       setSaveError("");
-      return saved;
-    } catch (error) {
-      setSaveState("error");
-      setSaveError((error as Error).message);
-    }
+      return result.record;
+    });
+    queue.current = run;
+    return run;
   }
 
   // Autosave a moment after the last change.
   useEffect(() => {
     if (!dirty) return;
-    const timer = setTimeout(() => {
-      setSaveState("saving");
-      persist();
-    }, 900);
+    const timer = setTimeout(() => persist(), 900);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draft]);
@@ -113,10 +102,12 @@ function Editor({ seed, initial }: { seed: StudioCourse[]; initial: StudioCourse
     };
   });
 
-  function changeStatus(status: StudioCourse["status"]) {
+  async function changeStatus(status: StudioCourse["status"]) {
+    const previous = draft.status;
     const next = { ...draft, status };
     setDraft(next);
-    persist(next);
+    // The server re-checks the checklist; if it refuses, go back to the old status.
+    if (!(await persist(next))) setDraft((d) => ({ ...d, status: previous }));
   }
 
   const stepDone = (id: EditorStep) => {
@@ -124,7 +115,7 @@ function Editor({ seed, initial }: { seed: StudioCourse[]; initial: StudioCourse
     return own.length > 0 && own.every((i) => i.done);
   };
 
-  const slugTaken = courses.some((c) => c.id !== draft.id && c.slug === draft.slug);
+  const slugTaken = takenSlugs.includes(draft.slug);
 
   return (
     <div className="space-y-6">
@@ -201,7 +192,7 @@ function Editor({ seed, initial }: { seed: StudioCourse[]; initial: StudioCourse
                 <div className="h-full rounded-full bg-brand transition-[width]" style={{ width: `${(doneCount / items.length) * 100}%` }} />
               </div>
             </div>
-            <ol className="no-scrollbar flex gap-1 overflow-x-auto lg:flex-col" data-lenis-prevent-horizontal>
+            <ol className="no-scrollbar flex gap-1 overflow-x-auto lg:flex-col">
               {steps.map((s, i) => (
                 <li key={s.id} className="shrink-0">
                   {(i === 0 || steps[i - 1].group !== s.group) && (
@@ -321,6 +312,20 @@ function Editor({ seed, initial }: { seed: StudioCourse[]; initial: StudioCourse
                       <span className="inline-flex items-center rounded-l-xl border border-r-0 border-border bg-muted px-3 text-sm text-muted-foreground">/courses/</span>
                       <Input id="slug" value={draft.slug} onChange={(e) => set("slug", slugify(e.target.value))} className="rounded-l-none" aria-invalid={slugTaken || undefined} />
                     </div>
+                  </Field>
+                  <Field label="Instructor" htmlFor="instructor" hint="Shown on the course page. Manage the list in Studio → Instructors.">
+                    <InstructorSelect
+                      id="instructor"
+                      value={draft.instructorId}
+                      options={instructors}
+                      onChange={(option) =>
+                        setDraft((d) => ({
+                          ...d,
+                          instructorId: option?.id ?? null,
+                          instructor: option ? { name: option.name, email: option.email, image: option.image } : { name: "Ultimate Deejays", email: "", image: "" },
+                        }))
+                      }
+                    />
                   </Field>
                 </div>
               </Panel>
@@ -450,10 +455,9 @@ function Editor({ seed, initial }: { seed: StudioCourse[]; initial: StudioCourse
                   <p className="text-sm text-muted-foreground">Permanently delete this course and all its lessons.</p>
                   <button
                     type="button"
-                    onClick={() => {
+                    onClick={async () => {
                       if (!window.confirm(`Delete "${draft.title}"? This can't be undone.`)) return;
-                      remove(draft.id);
-                      router.push("/studio/courses");
+                      if ((await runAction(() => deleteCourse(draft.id))).ok) router.push("/studio/courses");
                     }}
                     className="inline-flex h-10 items-center rounded-lg border border-red-500/40 px-4 text-sm font-semibold text-red-600 hover:bg-red-500/10 dark:text-red-400"
                   >

@@ -37,6 +37,18 @@ export function validateName(name: string) {
   if (name.length > 80) return "Use 80 characters or fewer.";
 }
 
+/** Where people land after signing in or up. */
+export const HOME_AFTER_AUTH = "/account/profile";
+
+/**
+ * A ?next= value that's safe to redirect to: a path on this site only, so a
+ * crafted link can't bounce people to another domain after they log in.
+ */
+export function safeNextPath(next: string | null | undefined, fallback = HOME_AFTER_AUTH) {
+  if (!next || !next.startsWith("/") || next.startsWith("//") || next.startsWith("/\\")) return fallback;
+  return next;
+}
+
 /** 0–4, for the sign-up strength meter */
 export function passwordStrength(password: string) {
   if (!password) return 0;

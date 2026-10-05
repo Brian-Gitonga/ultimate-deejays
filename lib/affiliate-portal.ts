@@ -1,13 +1,9 @@
-import { balanceOf, type Affiliate } from "./affiliates";
-import { getAffiliateAccounts, getTransactions } from "./earnings";
 import type { Plan } from "./plans";
-import { defaultSettings } from "./site-settings";
 
 /*
- * The affiliate's own view of the program. PLACEHOLDER: the signed-in
- * affiliate is fixed to Kaya Mensah; with auth, look the affiliate up from the
- * session. Sales come from the same sample payments the studio sees, so both
- * dashboards always agree.
+ * The affiliate's own view of the program: the shapes the /affiliate pages
+ * render, plus the promo files and copy. The numbers are loaded for the
+ * signed-in affiliate by lib/db/affiliate-portal.ts.
  */
 
 export type ReferralStatus = "pending" | "approved" | "paid" | "refunded";
@@ -25,7 +21,10 @@ export type Referral = {
   status: ReferralStatus;
   /** Ready to pay out from this date (end of the refund window) */
   clearsOn: string;
+  /** The tracking link it came through ("" = main link or code) */
   linkId: string;
+  /** They typed your code at checkout (or it was applied from your link) */
+  usedCode: boolean;
 };
 
 export type TrackedLink = {
@@ -45,6 +44,24 @@ export type AffiliatePayout = { id: string; period: string; date: string; amount
 
 export type MonthStat = { month: string; clicks: number | null; signups: number | null; sales: number | null; earnings: number | null };
 
+/** The signed-in affiliate, with all-time totals. */
+export type PortalAffiliate = {
+  name: string;
+  avatar: string | null;
+  code: string;
+  commission: number;
+  /** % off buyers get with this affiliate's code or link */
+  customerDiscount: number;
+  approvedAt: string | null;
+  clicks: number;
+  signups: number;
+  sales: number;
+};
+
+export type PortalBalance = { pending: number; approved: number; owed: number; lifetime: number; paidOut: number };
+
+export type ProgramTerms = { cookieDays: number; minPayout: number; refundWindow: number; terms: string; currency: string };
+
 export type PromoAsset = {
   id: string;
   kind: "banner" | "social" | "logo" | "photo";
@@ -58,112 +75,6 @@ export type PromoAsset = {
 };
 
 export type SwipeCopy = { id: string; channel: string; title: string; text: string };
-
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-const DAY = 86_400_000;
-const round = (n: number) => Math.round(n * 100) / 100;
-const iso = (ms: number) => new Date(ms).toISOString().slice(0, 10);
-
-export const SIGNED_IN_AFFILIATE = "DJKAYA";
-
-const linkSeed: Omit<TrackedLink, "clicks" | "sales" | "earned">[] = [
-  { id: "lnk-yt", label: "YouTube video descriptions", path: "/", sub: "youtube", createdAt: "2026-03-05" },
-  { id: "lnk-bio", label: "Instagram bio", path: "/pricing", sub: "instagram-bio", createdAt: "2026-03-05" },
-  { id: "lnk-beatmatch", label: "Beatmatching tutorial", path: "/courses/dj-fundamentals", sub: "beatmatch-video", createdAt: "2026-05-18" },
-  { id: "lnk-news", label: "Monthly newsletter", path: "/", sub: "newsletter", createdAt: "2026-07-01" },
-];
-// Share of clicks each link brings in (adds up to 1).
-const linkShare = [0.46, 0.27, 0.19, 0.08];
-
-export function getAffiliatePortal(today: string) {
-  const affiliate: Affiliate = getAffiliateAccounts().find((a) => a.code === SIGNED_IN_AFFILIATE)!;
-  const window = defaultSettings.payments.refundWindow;
-  const sales = getTransactions()
-    .filter((t) => t.affiliate === affiliate.code)
-    .sort((a, b) => b.date.localeCompare(a.date));
-
-  const referrals: Referral[] = sales.map((t, i) => {
-    const clearsOn = iso(Date.parse(t.date) + window * DAY);
-    const [first, last = ""] = t.customer.split(" ");
-    const status: ReferralStatus = t.status === "refunded" ? "refunded" : t.date < "2026-09-01" ? "paid" : clearsOn <= today ? "approved" : "pending";
-    return {
-      id: `ref_${t.id.slice(4).toLowerCase()}`,
-      date: t.date,
-      customer: `${first} ${last.charAt(0)}.`,
-      country: t.country,
-      plan: t.plan,
-      kind: t.kind,
-      sale: t.amount,
-      commission: t.status === "refunded" ? 0 : t.commission,
-      status,
-      clearsOn,
-      // Spread sales across links roughly in line with their clicks.
-      linkId: linkSeed[[0, 1, 0, 2, 1, 0, 3, 2, 0, 1][i % 10]].id,
-    };
-  });
-
-  // Clicks and sign-ups grow month by month after approval; totals match the studio's numbers.
-  const startMonth = Number(affiliate.approvedAt!.slice(5, 7)) - 1;
-  const lastMonth = 8; // September: the latest month with data
-  const weights = MONTHS.map((_, m) => (m < startMonth || m > lastMonth ? 0 : 1 + (m - startMonth) * 0.35));
-  const weightSum = weights.reduce((s, w) => s + w, 0);
-  const share = (total: number, m: number) => Math.round((total * weights[m]) / weightSum);
-
-  const monthly: MonthStat[] = MONTHS.map((month, m) => {
-    if (m < startMonth || m > lastMonth) return { month, clicks: null, signups: null, sales: null, earnings: null };
-    const rows = referrals.filter((r) => Number(r.date.slice(5, 7)) === m + 1 && r.status !== "refunded");
-    return {
-      month,
-      clicks: share(affiliate.clicks, m),
-      signups: share(affiliate.signups, m),
-      sales: rows.length,
-      earnings: round(rows.reduce((s, r) => s + r.commission, 0)),
-    };
-  });
-
-  const links: TrackedLink[] = linkSeed.map((l, i) => {
-    const rows = referrals.filter((r) => r.linkId === l.id && r.status !== "refunded");
-    return { ...l, clicks: Math.round(affiliate.clicks * linkShare[i]), sales: rows.length, earned: round(rows.reduce((s, r) => s + r.commission, 0)), updatedAt: `${l.createdAt}T00:00:00.000Z` };
-  });
-
-  // Each month's cleared commission is paid on the last day of the following month.
-  const payouts: AffiliatePayout[] = MONTHS.slice(startMonth, lastMonth)
-    .map((label, k) => {
-      const m = startMonth + k;
-      const rows = referrals.filter((r) => r.status === "paid" && Number(r.date.slice(5, 7)) === m + 1);
-      return {
-        id: `AP-${2041 + m}`,
-        period: `${label} 2026`,
-        date: iso(Date.UTC(2026, m + 2, 0)),
-        amount: round(rows.reduce((s, r) => s + r.commission, 0)),
-        referrals: rows.length,
-        method: "PayPal · kaya@djkaya.com",
-        status: "paid" as const,
-      };
-    })
-    .filter((p) => p.amount > 0)
-    .reverse();
-
-  const pending = round(referrals.filter((r) => r.status === "pending").reduce((s, r) => s + r.commission, 0));
-  const approved = round(referrals.filter((r) => r.status === "approved").reduce((s, r) => s + r.commission, 0));
-
-  return {
-    affiliate,
-    referrals,
-    monthly,
-    links,
-    payouts,
-    balance: { pending, approved, owed: balanceOf(affiliate), lifetime: affiliate.earned, paidOut: affiliate.paidOut },
-    program: {
-      cookieDays: defaultSettings.affiliates.cookieDays,
-      minPayout: defaultSettings.affiliates.minPayout,
-      refundWindow: window,
-      terms: defaultSettings.affiliates.terms,
-    },
-  };
-}
-
-export type AffiliatePortal = ReturnType<typeof getAffiliatePortal>;
 
 export const promoAssets: PromoAsset[] = [
   { id: "b-leader", kind: "banner", title: "Leaderboard", size: "728 × 90", file: "/affiliate/banners/leaderboard-728x90.svg", format: "SVG", use: "Website header or above a blog post" },
@@ -218,13 +129,11 @@ export const brandColors = [
   { name: "White", hex: "#FFFFFF" },
 ];
 
+/** Pages a tracking link can open. The links page adds every published course after these. */
 export const linkDestinations = [
   { path: "/", label: "Home page" },
   { path: "/pricing", label: "Pricing" },
   { path: "/courses", label: "All courses" },
-  { path: "/courses/dj-fundamentals", label: "Course: DJ Fundamentals (free)" },
-  { path: "/courses/scratch-school", label: "Course: Scratch School" },
-  { path: "/courses/afrobeats-amapiano-mixing", label: "Course: Afrobeats & Amapiano Mixing" },
   { path: "/challenges", label: "Challenges" },
   { path: "/blog", label: "Blog" },
 ];

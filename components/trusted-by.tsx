@@ -1,66 +1,54 @@
-import type { ReactNode } from "react";
+import Image from "next/image";
 
 /*
- * Placeholder partner logos — swap these for real venue / partner logos
- * (SVG or PNG in /public) once you have permission to use them.
+ * The software the courses teach, under the hero. Logos live in
+ * /public/brands/software (backgrounds removed); the ones with black or white
+ * lettering have a second version for dark mode. Each sits centred in an
+ * equal grid cell at the same height, so the row lines up at every width.
  */
-const logos: { color: string; mark: ReactNode; word: ReactNode }[] = [
-  {
-    color: "text-[#1f57bf]",
-    mark: <circle cx="12" cy="12" r="9" strokeWidth="4" fill="none" stroke="currentColor" strokeDasharray="42 15" />,
-    word: <span className="text-[1.5em] font-extrabold tracking-tight uppercase">Logoipsum</span>,
-  },
-  {
-    color: "text-neutral-700",
-    mark: <path d="M12 2 22 12 12 22 2 12Z M12 7 17 12 12 17 7 12Z" fillRule="evenodd" fill="currentColor" />,
-    word: <span className="text-[1.5em] font-light tracking-[0.2em] uppercase">Logoipsum</span>,
-  },
-  {
-    color: "text-neutral-900",
-    mark: null,
-    word: <span className="font-serif text-[1.75em] font-bold italic">Logoipsum</span>,
-  },
-  {
-    color: "text-[#1e3a8a]",
-    mark: <path d="M4 20V9l8-6 8 6v11h-6v-6h-4v6Z" fill="currentColor" />,
-    word: <span className="text-[1.5em] font-semibold">Logoipsum</span>,
-  },
-  {
-    color: "text-[#6d28d9]",
-    mark: (
-      <>
-        <circle cx="13" cy="13" r="8" strokeWidth="3.5" fill="none" stroke="currentColor" />
-        <path d="M3 3h4M5 1v4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-      </>
-    ),
-    word: <span className="text-[1.5em] font-bold tracking-tight">Logoipsum</span>,
-  },
-  {
-    color: "text-[#1e40af]",
-    mark: <path d="M3 5h18v14H3Z M8 5v14M16 5v14M3 12h18" fill="none" stroke="currentColor" strokeWidth="2.5" />,
-    word: <span className="font-serif text-[1.625em] font-semibold">Logoipsum</span>,
-  },
+
+type Logo = {
+  name: string;
+  src: string;
+  /** Version for dark mode, when the lettering would disappear */
+  dark?: string;
+  width: number;
+  height: number;
+  /** Icon-only logos get their name written beside them */
+  label?: string;
+};
+
+const logos: Logo[] = [
+  { name: "VirtualDJ", src: "/brands/software/virtual-dj.png", width: 540, height: 128 },
+  { name: "Serato DJ Pro", src: "/brands/software/serato-dj-pro.png", dark: "/brands/software/serato-dj-pro-dark.png", width: 869, height: 152 },
+  { name: "Acid Pro", src: "/brands/software/acid-pro.png", dark: "/brands/software/acid-pro-dark.png", width: 568, height: 160 },
+  { name: "Vegas Pro", src: "/brands/software/vegas-pro.png", dark: "/brands/software/vegas-pro-dark.png", width: 776, height: 155 },
+  { name: "Adobe Premiere Pro", src: "/brands/software/premiere-pro.png", width: 164, height: 160, label: "Premiere Pro" },
+  { name: "Adobe After Effects", src: "/brands/software/after-effects.png", width: 164, height: 160, label: "After Effects" },
 ];
 
 export function TrustedBy() {
   return (
-    <section className="site-container pb-16">
-      <p className="text-center text-base text-muted-foreground sm:text-[1.0625rem]">
-        Trusted by DJs now playing clubs, festivals and events worldwide
+    <section aria-labelledby="software-title" className="site-container pb-16">
+      <p id="software-title" className="text-center text-base text-muted-foreground sm:text-[1.0625rem]">
+        Hands-on lessons in the software working DJs and creators use every day
       </p>
-      <ul className="mt-8 flex flex-wrap items-center justify-center gap-x-8 gap-y-6 text-[0.8125rem] sm:gap-x-12 sm:gap-y-8 sm:text-sm xl:flex-nowrap xl:justify-between xl:gap-x-6 xl:text-[0.9375rem]">
-        {logos.map((logo, i) => (
-          <li
-            key={i}
-            className={`flex items-center gap-2 ${logo.color} dark:text-neutral-400`}
-            aria-label="Partner logo placeholder"
-          >
-            {logo.mark && (
-              <svg viewBox="0 0 24 24" className="size-[2em]" aria-hidden="true">
-                {logo.mark}
-              </svg>
-            )}
-            <span aria-hidden="true">{logo.word}</span>
+      <ul className="mx-auto mt-8 grid max-w-6xl grid-cols-2 gap-x-6 gap-y-8 sm:grid-cols-3 lg:grid-cols-6 lg:gap-x-8">
+        {logos.map((logo) => (
+          <li key={logo.name} className="flex h-12 items-center justify-center" title={logo.name}>
+            <span className="flex items-center gap-2.5">
+              <Image
+                src={logo.src}
+                alt={logo.label ? "" : logo.name}
+                width={logo.width}
+                height={logo.height}
+                className={`h-8 w-auto sm:h-9 ${logo.label ? "" : "max-w-[10.5rem]"} object-contain ${logo.dark ? "dark:hidden" : ""}`}
+              />
+              {logo.dark && (
+                <Image src={logo.dark} alt={logo.name} width={logo.width} height={logo.height} className="hidden h-8 w-auto max-w-[10.5rem] object-contain sm:h-9 dark:block" />
+              )}
+              {logo.label && <span className="text-[0.9375rem] font-semibold whitespace-nowrap text-foreground sm:text-base">{logo.label}</span>}
+            </span>
           </li>
         ))}
       </ul>

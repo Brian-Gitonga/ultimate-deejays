@@ -55,8 +55,7 @@ export function useCatalog() {
 }
 
 export function scrollToResults() {
-  const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  document.getElementById("catalog")?.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "start" });
+  document.getElementById("catalog")?.scrollIntoView({ block: "start" });
 }
 
 export function CatalogProvider({

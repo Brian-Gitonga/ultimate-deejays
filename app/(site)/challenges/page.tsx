@@ -9,12 +9,12 @@ import { YouTubePlayer } from "@/components/youtube-player";
 import {
   challengeStatuses,
   challengeTypes,
-  challenges,
   legendaryRoutines,
   type ChallengeStatus,
   type ChallengeType,
 } from "@/lib/challenges";
 import { youtubeId } from "@/lib/curriculum";
+import { getPublicChallenges } from "@/lib/db/challenges";
 
 export const metadata: Metadata = {
   title: "DJ Challenges",
@@ -29,6 +29,7 @@ export default async function ChallengesPage({ searchParams }: PageProps<"/chall
   const params = await searchParams;
   const type = challengeTypes.find((t) => t.slug === params.type)?.slug ?? null;
   const status = challengeStatuses.find((s) => s.slug === params.status)?.slug ?? null;
+  const challenges = await getPublicChallenges();
 
   const featured = challenges
     .filter((c) => c.status === "live")
@@ -204,7 +205,7 @@ export default async function ChallengesPage({ searchParams }: PageProps<"/chall
 
 function FilterRow({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div role="group" aria-label={`Filter by ${label.toLowerCase()}`} className="no-scrollbar -mx-5 flex items-center gap-2 overflow-x-auto px-5 sm:mx-0 sm:px-0" data-lenis-prevent-horizontal>
+    <div role="group" aria-label={`Filter by ${label.toLowerCase()}`} className="no-scrollbar -mx-5 flex items-center gap-2 overflow-x-auto px-5 sm:mx-0 sm:px-0">
       <span className="shrink-0 pr-1 text-xs font-semibold tracking-wide text-muted-foreground uppercase">{label}</span>
       {children}
     </div>

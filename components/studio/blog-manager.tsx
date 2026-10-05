@@ -6,7 +6,8 @@ import { useState } from "react";
 import { postCategories } from "@/lib/post-categories";
 import { uid } from "@/lib/studio-courses";
 import type { PostStatus, StudioPost } from "@/lib/studio-blog";
-import { useCollection } from "@/lib/studio-store";
+import { deletePost, savePost } from "@/app/(studio)/studio/blog/actions";
+import { useServerCollection } from "@/lib/studio-store";
 import { ArrowUpRightIcon, CloseIcon, PencilIcon, PlusIcon } from "../icons";
 import { ConfirmDialog, ManageTable, RowMenu, useToast } from "./manage-table";
 import { StatusBadge } from "./status";
@@ -19,7 +20,7 @@ const categoryName = (slug: string) => postCategories.find((c) => c.slug === slu
 const readMinutes = (body: string) => Math.max(1, Math.ceil(body.trim().split(/\s+/).filter(Boolean).length / 225));
 
 export function BlogManager({ seed }: { seed: StudioPost[] }) {
-  const { items, save, remove } = useCollection("posts", seed);
+  const { items, save, remove } = useServerCollection(seed, { save: savePost, remove: deletePost });
   const [confirm, setConfirm] = useState<StudioPost | null>(null);
   const { show, toast } = useToast();
 
@@ -93,8 +94,9 @@ export function BlogManager({ seed }: { seed: StudioPost[] }) {
                 icon: PlusIcon,
                 onSelect: () => {
                   const id = uid();
-                  save({ ...p, id, slug: `${p.slug}-copy-${id.slice(0, 4)}`, title: `${p.title} (copy)`, status: "draft" });
-                  show("Duplicated as a draft");
+                  save({ ...p, id, slug: `${p.slug}-copy-${id.slice(0, 4)}`, title: `${p.title} (copy)`, status: "draft" }).then(
+                    (saved) => saved && show("Duplicated as a draft"),
+                  );
                 },
               },
               { label: "Delete", icon: CloseIcon, danger: true, onSelect: () => setConfirm(p) },
@@ -121,9 +123,9 @@ export function BlogManager({ seed }: { seed: StudioPost[] }) {
           confirmLabel="Delete post"
           onCancel={() => setConfirm(null)}
           onConfirm={() => {
-            remove(confirm.id);
-            show(`Deleted: ${confirm.title}`);
+            const post = confirm;
             setConfirm(null);
+            remove(post.id).then((done) => done && show(`Deleted: ${post.title}`));
           }}
         />
       )}

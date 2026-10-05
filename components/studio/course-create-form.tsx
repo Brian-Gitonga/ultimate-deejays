@@ -3,19 +3,19 @@
 import { useRouter } from "next/navigation";
 import { useRef, useState, type FormEvent } from "react";
 import { courseLevels } from "@/lib/course-taxonomy";
-import { languages, newCourse, slugify, type StudioCourse } from "@/lib/studio-courses";
-import { useStudioCourses } from "@/lib/studio-store";
+import { saveCourse } from "@/app/(studio)/studio/courses/actions";
+import { languages, newCourse, slugify, type InstructorOption, type StudioCourse } from "@/lib/studio-courses";
+import { runAction } from "@/lib/studio-store";
 import { ArrowRightIcon } from "../icons";
-import { AccessPicker, CategorySelect, ThumbnailPicker } from "./course-fields";
+import { AccessPicker, CategorySelect, InstructorSelect, ThumbnailPicker } from "./course-fields";
 import { Field, Input, Panel, Select, Textarea, primaryButton } from "./ui";
 
 const TITLE_MAX = 80;
 const SUBTITLE_MAX = 160;
 
-export function CourseCreateForm({ seed, instructor }: { seed: StudioCourse[]; instructor: StudioCourse["instructor"] }) {
+export function CourseCreateForm({ instructors, takenSlugs }: { instructors: InstructorOption[]; takenSlugs: string[] }) {
   const router = useRouter();
-  const { courses, save } = useStudioCourses(seed);
-  const [draft, setDraft] = useState(() => newCourse({}, instructor));
+  const [draft, setDraft] = useState(() => newCourse({}, instructors[0] ?? null));
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saveError, setSaveError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -44,16 +44,15 @@ export function CourseCreateForm({ seed, instructor }: { seed: StudioCourse[]; i
 
     // Keep URLs unique: add a suffix if another course already uses this slug.
     let slug = slugify(title);
-    while (courses.some((c) => c.slug === slug)) slug = `${slugify(title)}-${Math.random().toString(36).slice(2, 5)}`;
+    while (takenSlugs.includes(slug)) slug = `${slugify(title)}-${Math.random().toString(36).slice(2, 5)}`;
 
     setBusy(true);
-    try {
-      const created = save({ ...draft, title, subtitle: draft.subtitle.trim(), slug });
-      router.push(`/studio/courses/${created.id}/edit?step=curriculum&created=1`);
-    } catch (error) {
-      setSaveError((error as Error).message);
+    setSaveError("");
+    runAction(() => saveCourse({ ...draft, title, subtitle: draft.subtitle.trim(), slug })).then((result) => {
+      if (result.ok) return router.push(`/studio/courses/${result.record.id}/edit?step=curriculum&created=1`);
+      setSaveError(result.error);
       setBusy(false);
-    }
+    });
   }
 
   return (
@@ -133,6 +132,18 @@ export function CourseCreateForm({ seed, instructor }: { seed: StudioCourse[]; i
                 </Select>
               </Field>
             </div>
+
+            <Field label="Instructor" htmlFor="instructor" hint="Shown on the course page. Manage the list in Studio → Instructors.">
+              <InstructorSelect
+                id="instructor"
+                value={draft.instructorId}
+                options={instructors}
+                onChange={(option) => {
+                  set("instructorId", option?.id ?? null);
+                  set("instructor", option ? { name: option.name, email: option.email, image: option.image } : { name: "Ultimate Deejays", email: "", image: "" });
+                }}
+              />
+            </Field>
 
             <fieldset>
               <legend className="mb-1.5 text-sm font-medium text-foreground">

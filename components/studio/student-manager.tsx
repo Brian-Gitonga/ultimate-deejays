@@ -5,13 +5,14 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { plans, type Plan } from "@/lib/plans";
 import { averageProgress, type Student } from "@/lib/students";
-import { useCollection } from "@/lib/studio-store";
+import { deleteStudent, saveStudent } from "@/app/(studio)/studio/students/actions";
+import { useServerCollection } from "@/lib/studio-store";
 import { CloseIcon, DownloadIcon, LessonIcon, MailIcon, MessageIcon, TrophyIcon, UsersIcon, WalletIcon } from "../icons";
 import { ConfirmDialog, ManageTable, RowMenu, useToast } from "./manage-table";
 import { Kpi, Select, secondaryButton } from "./ui";
+import { useMoney, usePlanPrices } from "../money-context";
 
 const date = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
-const money = (n: number) => `$${n.toLocaleString("en-US")}`;
 export const planName = (slug: string) => plans.find((p) => p.slug === slug)?.name ?? slug;
 
 // Plans are ordered tiers, so they use one hue from light to dark (always shown with a label).
@@ -43,8 +44,8 @@ export function PlanBadge({ plan }: { plan: Plan["slug"] }) {
   return <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium whitespace-nowrap ${planTone[plan].pill}`}>{planName(plan)}</span>;
 }
 
-function exportCsv(students: Student[]) {
-  const header = ["Name", "Email", "Plan", "Status", "Country", "Joined", "Last active", "Courses", "Avg progress %", "Paid USD"];
+function exportCsv(students: Student[], currency: string) {
+  const header = ["Name", "Email", "Plan", "Status", "Country", "Joined", "Last active", "Courses", "Avg progress %", `Paid ${currency}`];
   const rows = students.map((s) => [s.name, s.email, planName(s.plan), s.status, s.country, s.joinedAt, s.lastActiveAt, s.enrollments.length, averageProgress(s), s.paid]);
   const csv = [header, ...rows].map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\n");
   const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
@@ -53,8 +54,9 @@ function exportCsv(students: Student[]) {
   URL.revokeObjectURL(url);
 }
 
-export function StudentManager({ seed }: { seed: Student[] }) {
-  const { items, save, remove } = useCollection("students", seed);
+export function StudentManager({ seed, initialQuery }: { seed: Student[]; initialQuery?: string }) {
+  const { whole: money, currency } = useMoney();
+  const { items, save, remove } = useServerCollection(seed, { save: saveStudent, remove: deleteStudent });
   const [openId, setOpenId] = useState<string | null>(null);
   const [confirm, setConfirm] = useState<{ student: Student; action: "delete" | "suspend" } | null>(null);
   const { show, toast } = useToast();
@@ -67,8 +69,7 @@ export function StudentManager({ seed }: { seed: Student[] }) {
   const byPlan = plans.map((p) => ({ plan: p, count: items.filter((s) => s.plan === p.slug).length }));
 
   function setStatus(student: Student, status: Student["status"]) {
-    save({ ...student, status });
-    show(status === "suspended" ? `${student.name} suspended` : `${student.name} reactivated`);
+    save({ ...student, status }).then((saved) => saved && show(status === "suspended" ? `${student.name} suspended` : `${student.name} reactivated`));
   }
 
   return (
@@ -102,6 +103,7 @@ export function StudentManager({ seed }: { seed: Student[] }) {
       <ManageTable
         title="Students"
         items={items}
+        initialQuery={initialQuery}
         getId={(s) => s.id}
         minWidth="58rem"
         searchText={(s) => [s.name, s.email, s.city, s.country]}
@@ -109,7 +111,7 @@ export function StudentManager({ seed }: { seed: Student[] }) {
         initialSort={{ key: "joined", dir: -1 }}
         onRowClick={(s) => setOpenId(s.id)}
         toolbar={
-          <button type="button" onClick={() => exportCsv(items)} className={`${secondaryButton} h-10`}>
+          <button type="button" onClick={() => exportCsv(items, currency)} className={`${secondaryButton} h-10`}>
             <DownloadIcon className="size-4" /> Export CSV
           </button>
         }
@@ -188,9 +190,8 @@ export function StudentManager({ seed }: { seed: Student[] }) {
           student={open}
           onClose={() => setOpenId(null)}
           onPlanChange={(plan) => {
-            const price = plans.find((p) => p.slug === plan)!.price;
-            save({ ...open, plan, paid: Math.max(open.paid, price) });
-            show(`${open.name} moved to ${planName(plan)}`);
+            const student = open;
+            save({ ...student, plan }).then((saved) => saved && show(`${student.name} moved to ${planName(plan)}`));
           }}
           onSuspend={() => setConfirm({ student: open, action: "suspend" })}
           onReactivate={() => setStatus(open, "active")}
@@ -209,11 +210,11 @@ export function StudentManager({ seed }: { seed: Student[] }) {
           confirmLabel={confirm.action === "delete" ? "Delete account" : "Suspend student"}
           onCancel={() => setConfirm(null)}
           onConfirm={() => {
+            const { student } = confirm;
             if (confirm.action === "delete") {
-              remove(confirm.student.id);
               setOpenId(null);
-              show(`Deleted ${confirm.student.name}`);
-            } else setStatus(confirm.student, "suspended");
+              remove(student.id).then((done) => done && show(`Deleted ${student.name}`));
+            } else setStatus(student, "suspended");
             setConfirm(null);
           }}
         />
@@ -238,6 +239,9 @@ function StudentDrawer({
   onReactivate: () => void;
   onDelete: () => void;
 }) {
+  const { whole: money } = useMoney();
+  const prices = usePlanPrices();
+  const priceOf = (slug: string) => prices.find((p) => p.slug === slug)?.price ?? 0;
   const closeRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
@@ -262,7 +266,6 @@ function StudentDrawer({
         role="dialog"
         aria-modal="true"
         aria-labelledby="student-name"
-        data-lenis-prevent
         className="absolute inset-y-0 right-0 flex w-full max-w-md flex-col bg-background shadow-2xl"
       >
         <div className="flex items-start justify-between gap-4 border-b border-border p-5">
@@ -313,7 +316,7 @@ function StudentDrawer({
                 <Select aria-label="Change plan" value={s.plan} onChange={(e) => onPlanChange(e.target.value as Plan["slug"])}>
                   {plans.map((p) => (
                     <option key={p.slug} value={p.slug}>
-                      {p.name} {p.price ? `($${p.price} one-time)` : "(free)"}
+                      {p.name} {priceOf(p.slug) ? `(${money(priceOf(p.slug))} one-time)` : "(free)"}
                     </option>
                   ))}
                 </Select>

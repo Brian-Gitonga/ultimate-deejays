@@ -6,7 +6,8 @@ import { useState } from "react";
 import { challengeTypes } from "@/lib/challenges";
 import { challengeState, type ChallengeState, type StudioChallenge } from "@/lib/studio-challenges";
 import { uid } from "@/lib/studio-courses";
-import { useCollection } from "@/lib/studio-store";
+import { deleteChallenge, saveChallenge } from "@/app/(studio)/studio/challenges/actions";
+import { useServerCollection } from "@/lib/studio-store";
 import { ArrowUpRightIcon, CloseIcon, PencilIcon, PlusIcon, TrophyIcon } from "../icons";
 import { ConfirmDialog, ManageTable, RowMenu, useToast } from "./manage-table";
 import { StatusBadge } from "./status";
@@ -27,7 +28,7 @@ export function ChallengeStateBadge({ state }: { state: ChallengeState }) {
 }
 
 export function ChallengeManager({ seed }: { seed: StudioChallenge[] }) {
-  const { items, save, remove } = useCollection("challenges", seed);
+  const { items, save, remove } = useServerCollection(seed, { save: saveChallenge, remove: deleteChallenge });
   const [confirm, setConfirm] = useState<StudioChallenge | null>(null);
   const { show, toast } = useToast();
   const state = (c: StudioChallenge) => challengeState(c);
@@ -93,8 +94,9 @@ export function ChallengeManager({ seed }: { seed: StudioChallenge[] }) {
                 icon: PlusIcon,
                 onSelect: () => {
                   const id = uid();
-                  save({ ...c, id, slug: `${c.slug}-${id.slice(0, 4)}`, title: `${c.title} (copy)`, published: false, entries: 0, winners: undefined });
-                  show("Duplicated as a draft");
+                  save({ ...c, id, slug: `${c.slug}-${id.slice(0, 4)}`, title: `${c.title} (copy)`, published: false, entries: 0, winners: undefined }).then(
+                    (saved) => saved && show("Duplicated as a draft"),
+                  );
                 },
               },
               { label: "Delete", icon: CloseIcon, danger: true, onSelect: () => setConfirm(c) },
@@ -116,15 +118,15 @@ export function ChallengeManager({ seed }: { seed: StudioChallenge[] }) {
           body={
             <>
               <span className="font-medium text-foreground">{confirm.title}</span>
-              {confirm.entries ? ` has ${confirm.entries} entries.` : ""} Deleting it removes it from the site. This can&apos;t be undone.
+              {confirm.entries ? ` has ${confirm.entries} entries, which will be deleted too.` : ""} Deleting it removes it from the site. This can&apos;t be undone.
             </>
           }
           confirmLabel="Delete challenge"
           onCancel={() => setConfirm(null)}
           onConfirm={() => {
-            remove(confirm.id);
-            show(`Deleted: ${confirm.title}`);
+            const challenge = confirm;
             setConfirm(null);
+            remove(challenge.id).then((done) => done && show(`Deleted: ${challenge.title}`));
           }}
         />
       )}

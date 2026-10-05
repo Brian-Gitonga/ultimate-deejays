@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { AffiliateShell } from "@/components/affiliate/shell";
-import { SIGNED_IN_AFFILIATE } from "@/lib/affiliate-portal";
-import { getAffiliateApplications } from "@/lib/affiliates";
+import { CurrencyProvider } from "@/components/money-context";
+import { displayName, requireAffiliate } from "@/lib/dal";
+import { getSiteSettings } from "@/lib/db/settings";
 
 // The affiliate portal is private: never index it.
 export const metadata: Metadata = {
@@ -10,8 +11,19 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-export default function AffiliateLayout({ children }: { children: ReactNode }) {
-  // TODO: load the signed-in affiliate from the session; send people who aren't approved yet to the program landing page.
-  const a = getAffiliateApplications().find((x) => x.code === SIGNED_IN_AFFILIATE)!;
-  return <AffiliateShell affiliate={{ name: a.name, avatar: a.avatar, code: a.code, commission: a.commission }}>{children}</AffiliateShell>;
+/*
+ * Approved affiliates only: everyone else lands on /account/affiliate, which
+ * shows how to apply or where their application stands. Each page loads the
+ * signed-in affiliate's own numbers (lib/db/affiliate-portal.ts).
+ */
+export default async function AffiliateLayout({ children }: { children: ReactNode }) {
+  const [viewer, settings] = await Promise.all([requireAffiliate(), getSiteSettings()]);
+  const { code, commission } = viewer.affiliate;
+  return (
+    <AffiliateShell affiliate={{ name: displayName(viewer), avatar: viewer.profile.avatarUrl, code: code ?? "", commission }}>
+      <CurrencyProvider currency={settings.general.currency} plans={settings.plans.map(({ slug, name, price }) => ({ slug, name, price }))}>
+        {children}
+      </CurrencyProvider>
+    </AffiliateShell>
+  );
 }

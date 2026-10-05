@@ -1,13 +1,16 @@
 import Image from "next/image";
 import Link from "next/link";
-import { team } from "@/lib/content";
+import { founder, supportLead } from "@/lib/content";
+import { getInstructors } from "@/lib/db/instructors";
 import { ArrowRightIcon } from "./icons";
 
-export function AboutTeam() {
+export async function AboutTeam() {
+  const instructors = await getInstructors(true);
+  const team = [founder, ...instructors.map(({ slug, name, specialty, image }) => ({ slug, name, role: specialty, image })), supportLead];
   return (
     <section id="team" aria-labelledby="team-title" className="site-container py-16 lg:py-24">
       <div className="grid items-center gap-12 lg:grid-cols-[0.9fr_2fr] lg:gap-16">
-        <div className="reveal">
+        <div>
           <h2
             id="team-title"
             className="text-[1.75rem] leading-tight font-bold tracking-tight text-balance text-foreground sm:text-[2rem]"
@@ -28,7 +31,7 @@ export function AboutTeam() {
           </Link>
         </div>
 
-        <ul className="reveal grid grid-cols-2 gap-4 sm:grid-cols-4 sm:gap-6">
+        <ul className="grid grid-cols-2 gap-4 sm:grid-cols-4 sm:gap-6">
           {team.map((person) => (
             <li key={person.slug}>
               <figure className="group relative aspect-[24/25] overflow-hidden rounded-2xl bg-muted">

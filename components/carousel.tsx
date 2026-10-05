@@ -95,8 +95,6 @@ export function Carousel({
       <div
         ref={trackRef}
         tabIndex={0}
-        // Sideways swipes scroll the track natively instead of being smoothed as page scroll.
-        data-lenis-prevent-horizontal
         className="no-scrollbar -mx-4 flex snap-x snap-mandatory scroll-px-4 gap-6 overflow-x-auto overscroll-x-contain px-4 pt-2 pb-8 outline-none focus-visible:ring-2 focus-visible:ring-brand/40"
       >
         {slides.map((slide, i) => (

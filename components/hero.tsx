@@ -1,11 +1,12 @@
 import Image from "next/image";
 import Link from "next/link";
+import { getSiteStats, studentsLabel } from "@/lib/db/stats";
 import { HeroVisual } from "./hero-visual";
-import { StarIcon } from "./icons";
 
 const students = [1, 2, 3, 4, 5].map((n) => `/images/students/student-${n}.jpg`);
 
-export function Hero() {
+export async function Hero() {
+  const stats = await getSiteStats();
   return (
     <section className="site-container pt-8 pb-14 lg:pt-16 lg:pb-20 xl:pt-20">
       <div className="grid items-center gap-y-14 lg:grid-cols-12 lg:gap-x-6">
@@ -45,23 +46,16 @@ export function Hero() {
               ))}
             </div>
             <div>
-              <div className="flex items-center gap-2 sm:gap-3">
-                <div className="flex gap-1.5 text-yellow-500 sm:gap-3" aria-hidden="true">
-                  {[0, 1, 2, 3, 4].map((i) => (
-                    <StarIcon key={i} className="size-4" />
-                  ))}
-                </div>
-                <span className="text-lg font-medium text-foreground">
-                  5.0<span className="sr-only"> out of 5 stars</span>
-                </span>
-              </div>
-              <p className="text-sm whitespace-nowrap text-muted-foreground sm:text-base">+2,000 students worldwide</p>
+              {stats.students > 0 && <p className="text-base font-semibold text-foreground sm:text-lg">{studentsLabel(stats.students)} students learning</p>}
+              <p className="text-sm text-muted-foreground sm:text-base">
+                Free to start. No card needed.
+              </p>
             </div>
           </div>
         </div>
 
         <div className="lg:col-span-7">
-          <HeroVisual />
+          <HeroVisual courses={stats.courses} students={studentsLabel(stats.students)} freeLessons={stats.freeLessons} />
         </div>
       </div>
     </section>

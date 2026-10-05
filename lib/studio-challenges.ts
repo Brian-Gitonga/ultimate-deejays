@@ -1,22 +1,43 @@
 import type { Challenge, ChallengeStatus } from "./challenges";
 
-/* Challenges as the studio edits them. Live/upcoming/ended comes from the dates, so it never goes stale. */
+/*
+ * Challenges as the studio edits them. Live/upcoming/ended comes from the
+ * dates, so it never goes stale. Stored in the challenges table; entries in
+ * challenge_entries (see ChallengeEntry).
+ */
 
-export type StudioChallenge = Omit<Challenge, "status"> & { id: string; published: boolean; updatedAt: string };
+export type StudioChallenge = Omit<Challenge, "status"> & { published: boolean; updatedAt: string };
 
 export type ChallengeState = ChallengeStatus | "draft";
+
+export type EntryStatus = "submitted" | "shortlisted" | "winner" | "disqualified";
+
+export type ChallengeEntry = {
+  id: string;
+  name: string;
+  email: string;
+  youtubeUrl: string;
+  youtubeId: string;
+  status: EntryStatus;
+  score: number | null;
+  notes: string;
+  /** Signed in when they entered */
+  hasAccount: boolean;
+  createdAt: string;
+};
+
+export const entryStatuses: { value: EntryStatus; label: string }[] = [
+  { value: "submitted", label: "Submitted" },
+  { value: "shortlisted", label: "Shortlisted" },
+  { value: "winner", label: "Winner" },
+  { value: "disqualified", label: "Disqualified" },
+];
 
 export function challengeState(c: Pick<StudioChallenge, "published" | "opens" | "closes">, today = new Date().toISOString().slice(0, 10)): ChallengeState {
   if (!c.published) return "draft";
   if (today < c.opens) return "upcoming";
   if (today > c.closes) return "ended";
   return "live";
-}
-
-export function toStudioChallenge(c: Challenge): StudioChallenge {
-  const { status: _status, ...rest } = c;
-  void _status;
-  return { ...rest, id: c.slug, published: true, updatedAt: `${c.opens}T09:00:00.000Z` };
 }
 
 export function challengeProblems(c: StudioChallenge): Record<string, string> {

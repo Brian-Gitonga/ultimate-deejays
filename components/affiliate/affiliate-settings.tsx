@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { useId, useState } from "react";
 import type { AffiliateAccount } from "@/lib/affiliate-links";
 import { CheckIcon, ClockIcon, TagIcon } from "../icons";
@@ -8,20 +9,19 @@ import { ConfirmDialog, useToast } from "../studio/manage-table";
 import { Field, Input, Panel, Switch, Textarea, primaryButton, secondaryButton } from "../studio/ui";
 import { useAffiliateAccount, useDraft } from "./use-account";
 
-const emailOk = (v: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
 
 export function AffiliateSettings({
-  seed,
+  initial,
   affiliate,
   program,
 }: {
-  seed: AffiliateAccount[];
-  affiliate: { code: string; commission: number; avatar: string | null; approvedAt: string | null };
-  program: { cookieDays: number; minPayout: number; refundWindow: number; terms: string };
+  initial: AffiliateAccount;
+  affiliate: { code: string; commission: number; customerDiscount: number; avatar: string | null; approvedAt: string | null };
+  program: { cookieDays: number; minPayout: number; refundWindow: number; terms: string; currency: string };
 }) {
   const id = useId();
-  const { account, save } = useAffiliateAccount(seed);
-  const profile = useDraft({ name: account.name, email: account.email, website: account.website, channels: account.channels });
+  const { account, save } = useAffiliateAccount(initial);
+  const profile = useDraft({ website: account.website, channels: account.channels });
   const notify = useDraft(account.notifications);
   const [code, setCode] = useState("");
   const [showErrors, setShowErrors] = useState(false);
@@ -29,7 +29,7 @@ export function AffiliateSettings({
   const { show, toast } = useToast();
 
   const p = profile.draft;
-  const errors = { name: !p.name.trim() ? "Enter your name" : "", email: !emailOk(p.email) ? "Enter a valid email address" : "" };
+  const errors = { website: p.website.trim() && !/^https?:\/\//.test(p.website.trim()) ? "Start with https://" : "" };
   const requested = code.toUpperCase().replace(/[^A-Z0-9]/g, "");
   const codeError = requested && (requested.length < 4 || requested.length > 14) ? "Use 4 to 14 letters or numbers" : "";
   const initials = account.name.split(" ").map((x) => x[0]).slice(0, 2).join("");
@@ -49,16 +49,24 @@ export function AffiliateSettings({
               <p className="text-sm text-muted-foreground">Affiliate since {affiliate.approvedAt ? new Date(affiliate.approvedAt).toLocaleDateString("en-US", { month: "long", year: "numeric", timeZone: "UTC" }) : "—"}</p>
             </div>
           </div>
+          <dl className="mb-5 grid grid-cols-1 gap-4 rounded-xl bg-muted/50 p-4 text-sm sm:grid-cols-2">
+            <div>
+              <dt className="text-muted-foreground">Name</dt>
+              <dd className="mt-0.5 font-medium text-foreground">{account.name}</dd>
+            </div>
+            <div>
+              <dt className="text-muted-foreground">Email</dt>
+              <dd className="mt-0.5 truncate font-medium text-foreground">{account.email}</dd>
+            </div>
+            <p className="text-xs text-muted-foreground sm:col-span-2">
+              Change these in <Link href="/account/profile" className="font-medium text-brand hover:underline">your profile</Link> and{" "}
+              <Link href="/account/settings" className="font-medium text-brand hover:underline">account settings</Link>.
+            </p>
+          </dl>
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-            <Field label="Name" htmlFor={`${id}-name`} required error={showErrors ? errors.name || undefined : undefined}>
-              <Input id={`${id}-name`} value={p.name} onChange={(e) => profile.setDraft({ ...p, name: e.target.value })} aria-invalid={showErrors && !!errors.name} />
-            </Field>
-            <Field label="Email" htmlFor={`${id}-email`} required error={showErrors ? errors.email || undefined : undefined}>
-              <Input id={`${id}-email`} type="email" value={p.email} onChange={(e) => profile.setDraft({ ...p, email: e.target.value })} aria-invalid={showErrors && !!errors.email} />
-            </Field>
             <div className="sm:col-span-2">
-              <Field label="Main channel or website" htmlFor={`${id}-site`}>
-                <Input id={`${id}-site`} type="url" placeholder="https://" value={p.website} onChange={(e) => profile.setDraft({ ...p, website: e.target.value })} />
+              <Field label="Main channel or website" htmlFor={`${id}-site`} error={showErrors ? errors.website || undefined : undefined}>
+                <Input id={`${id}-site`} type="url" placeholder="https://" value={p.website} onChange={(e) => profile.setDraft({ ...p, website: e.target.value })} aria-invalid={showErrors && !!errors.website} />
               </Field>
             </div>
             <div className="sm:col-span-2">
@@ -77,10 +85,9 @@ export function AffiliateSettings({
               type="button"
               disabled={!profile.dirty}
               onClick={() => {
-                if (errors.name || errors.email) return setShowErrors(true);
-                save({ ...account, ...p });
+                if (errors.website) return setShowErrors(true);
                 setShowErrors(false);
-                show("Profile saved");
+                save({ ...account, ...p }).then((saved) => saved && show("Profile saved"));
               }}
               className={primaryButton}
             >
@@ -106,8 +113,7 @@ export function AffiliateSettings({
                   <button
                     type="button"
                     onClick={() => {
-                      save({ ...account, codeRequest: null });
-                      show("Request cancelled");
+                      save({ ...account, codeRequest: null }).then((saved) => saved && show("Request cancelled"));
                     }}
                     className="ml-1 font-medium text-brand hover:underline"
                   >
@@ -121,9 +127,11 @@ export function AffiliateSettings({
                 onSubmit={(e) => {
                   e.preventDefault();
                   if (!requested || codeError) return;
-                  save({ ...account, codeRequest: requested });
-                  setCode("");
-                  show("Code request sent");
+                  save({ ...account, codeRequest: requested }).then((saved) => {
+                    if (!saved) return;
+                    setCode("");
+                    show("Code request sent");
+                  });
                 }}
               >
                 <div className="flex-1">
@@ -155,8 +163,7 @@ export function AffiliateSettings({
               <button
                 type="button"
                 onClick={() => {
-                  save({ ...account, notifications: notify.draft });
-                  show("Notification settings saved");
+                  save({ ...account, notifications: notify.draft }).then((saved) => saved && show("Notification settings saved"));
                 }}
                 className={primaryButton}
               >
@@ -173,9 +180,10 @@ export function AffiliateSettings({
             <dl className="grid grid-cols-2 gap-3">
               {[
                 ["Commission", `${affiliate.commission}%`],
+                ["Buyer discount", affiliate.customerDiscount ? `${affiliate.customerDiscount}% off` : "None"],
                 ["Cookie", `${program.cookieDays} days`],
                 ["Refund window", `${program.refundWindow} days`],
-                ["Minimum payout", `$${program.minPayout}`],
+                ["Minimum payout", new Intl.NumberFormat("en-US", { style: "currency", currency: program.currency, maximumFractionDigits: 0 }).format(program.minPayout)],
               ].map(([k, v]) => (
                 <div key={k} className="flex flex-col-reverse rounded-xl border border-border p-3">
                   <dt className="text-xs text-muted-foreground">{k}</dt>
@@ -185,7 +193,7 @@ export function AffiliateSettings({
             </dl>
             <p className="mt-4 text-sm leading-relaxed text-muted-foreground">{program.terms}</p>
             <ul className="mt-4 space-y-2 text-sm text-muted-foreground">
-              {["Commission is on the plan price, before fees", "Upgrades earn commission on the difference paid", "Payouts go out on the last day of each month"].map((t) => (
+              {["Commission is on what the buyer pays, after any discount", "Upgrades earn commission on the difference paid", "Payouts go out on the last day of each month"].map((t) => (
                 <li key={t} className="flex gap-2">
                   <CheckIcon className="mt-0.5 size-4 shrink-0 text-brand" />
                   {t}
@@ -196,10 +204,26 @@ export function AffiliateSettings({
         </section>
 
         <Panel title="Leave the program">
-          <p className="text-sm text-muted-foreground">Your links stop earning straight away. Cleared commission is still paid in the next payout.</p>
-          <button type="button" onClick={() => setLeaving(true)} className="mt-4 inline-flex h-10 items-center rounded-lg px-3 text-sm font-semibold text-red-600 hover:bg-red-500/10 dark:text-red-400">
-            Leave affiliate program
-          </button>
+          {account.leaveRequestedAt ? (
+            <p role="status" className="text-sm text-muted-foreground">
+              You asked to leave on {new Date(account.leaveRequestedAt).toLocaleDateString("en-US", { month: "long", day: "numeric", timeZone: "UTC" })}. We&apos;ll confirm by
+              email and pay out any cleared balance.{" "}
+              <button
+                type="button"
+                onClick={() => save({ ...account, leaveRequestedAt: null }).then((saved) => saved && show("You're staying in the program"))}
+                className="font-medium text-brand hover:underline"
+              >
+                I&apos;ve changed my mind
+              </button>
+            </p>
+          ) : (
+            <>
+              <p className="text-sm text-muted-foreground">Your links stop earning once we confirm. Cleared commission is still paid in the next payout.</p>
+              <button type="button" onClick={() => setLeaving(true)} className="mt-4 inline-flex h-10 items-center rounded-lg px-3 text-sm font-semibold text-red-600 hover:bg-red-500/10 dark:text-red-400">
+                Leave affiliate program
+              </button>
+            </>
+          )}
         </Panel>
       </div>
 
@@ -211,7 +235,7 @@ export function AffiliateSettings({
           onCancel={() => setLeaving(false)}
           onConfirm={() => {
             setLeaving(false);
-            show("Request received. We'll email you to confirm.");
+            save({ ...account, leaveRequestedAt: new Date().toISOString() }).then((saved) => saved && show("Request received. We'll email you to confirm."));
           }}
         />
       )}

@@ -1,71 +1,45 @@
 "use client";
 
-import Image from "next/image";
-import { useRef, useState, type FormEvent } from "react";
-import { validateName } from "@/lib/auth";
-import { experienceOptions, fileToAvatar, genreOptions, useProfile, type Profile } from "@/lib/profile-store";
+import { useRef, useState, useTransition, type FormEvent } from "react";
+import { saveProfile } from "@/app/(site)/account/profile/actions";
+import { BIO_MAX, experienceOptions, fieldErrors, genreOptions, profileInputSchema, type Profile } from "@/lib/profile";
+import { fileToAvatar } from "@/lib/profile-store";
 import { AccountCard } from "./account-card";
 import { FormMessage, TextField } from "./auth-form-parts";
 import { CameraIcon, CheckIcon } from "./icons";
-
-const BIO_MAX = 280;
+import { UserAvatar } from "./user-avatar";
 
 type Status = { status: "idle" | "error" | "notice"; message?: string };
 
 /*
- * Wraps the editor so it restarts from the saved profile whenever the saved
- * profile changes (first load from storage, or after saving).
+ * The profile editor, loaded from and saved to Supabase. It restarts from the
+ * saved profile whenever the server sends a new one (after each save), so
+ * "unsaved changes" always compares against what's really stored.
  */
-export function ProfileForm() {
-  const [profile, save] = useProfile();
+export function ProfileForm({ profile }: { profile: Profile }) {
   const [status, setStatus] = useState<Status>({ status: "idle" });
-  return (
-    <ProfileEditor
-      key={JSON.stringify(profile)}
-      initial={profile}
-      status={status}
-      onSave={(next) => {
-        try {
-          save(next);
-          setStatus({ status: "notice", message: "Profile saved. Your changes show across your account." });
-        } catch (error) {
-          setStatus({ status: "error", message: (error as Error).message });
-        }
-      }}
-      onError={(message) => setStatus({ status: "error", message })}
-    />
-  );
-}
-
-function validate(p: Profile) {
-  const errors: Record<string, string> = {};
-  const nameError = validateName(p.fullName.trim());
-  if (nameError) errors.fullName = nameError;
-  if (p.djName.length > 40) errors.djName = "Keep your DJ name to 40 characters or fewer.";
-  if (p.bio.length > BIO_MAX) errors.bio = `Keep your bio to ${BIO_MAX} characters.`;
-  if (p.instagram && !/^@?[A-Za-z0-9._]{1,30}$/.test(p.instagram)) errors.instagram = "Enter your Instagram handle, like @djjordan.";
-  if (p.soundcloud && !/^https:\/\/(www\.|on\.)?soundcloud\.com\/\S+$/.test(p.soundcloud))
-    errors.soundcloud = "Paste your full SoundCloud link, starting with https://soundcloud.com/.";
-  return errors;
+  return <ProfileEditor key={JSON.stringify(profile)} initial={profile} status={status} setStatus={setStatus} />;
 }
 
 function ProfileEditor({
   initial,
   status,
-  onSave,
-  onError,
+  setStatus,
 }: {
   initial: Profile;
   status: Status;
-  onSave: (profile: Profile) => void;
-  onError: (message: string) => void;
+  setStatus: (status: Status) => void;
 }) {
   const [draft, setDraft] = useState(initial);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [busyPhoto, setBusyPhoto] = useState(false);
+  const [saving, startSaving] = useTransition();
   const fileRef = useRef<HTMLInputElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
   const dirty = JSON.stringify(draft) !== JSON.stringify(initial);
+
+  const onError = (message: string) => setStatus({ status: "error", message });
+  const focusFirstError = () => requestAnimationFrame(() => formRef.current?.querySelector<HTMLElement>("[aria-invalid='true']")?.focus());
 
   const set = <K extends keyof Profile>(key: K, value: Profile[K]) => {
     setDraft((d) => ({ ...d, [key]: value }));
@@ -82,7 +56,7 @@ function ProfileEditor({
     if (file.size > 8 * 1024 * 1024) return onError("That photo is over 8 MB. Choose a smaller one.");
     setBusyPhoto(true);
     try {
-      set("avatar", await fileToAvatar(file));
+      set("avatarUrl", await fileToAvatar(file));
     } catch {
       onError("We couldn't read that photo. Try a different file.");
     } finally {
@@ -92,15 +66,36 @@ function ProfileEditor({
 
   function submit(event: FormEvent) {
     event.preventDefault();
-    const trimmed = { ...draft, fullName: draft.fullName.trim(), djName: draft.djName.trim(), instagram: draft.instagram.trim().replace(/^@/, "") };
-    const found = validate(trimmed);
-    setErrors(found);
-    if (Object.keys(found).length) {
-      requestAnimationFrame(() => formRef.current?.querySelector<HTMLElement>("[aria-invalid='true']")?.focus());
+    // Same rules the server applies; checking here first gives instant feedback.
+    const parsed = profileInputSchema.safeParse(draft);
+    if (!parsed.success) {
+      setErrors(fieldErrors(parsed.error));
+      focusFirstError();
       return;
     }
-    // TODO: send `trimmed` to your API (and upload the avatar to storage) once accounts exist.
-    onSave(trimmed);
+    setErrors({});
+
+    startSaving(async () => {
+      const body = new FormData();
+      body.set("profile", JSON.stringify(parsed.data));
+      // A newly picked photo is a data URL preview; send it as a file.
+      if (draft.avatarUrl?.startsWith("data:")) {
+        body.set("avatar", await (await fetch(draft.avatarUrl)).blob(), "avatar.jpg");
+      }
+
+      const result = await saveProfile(body).catch(() => ({ ok: false as const, message: "We couldn't reach the server. Check your connection and try again." }));
+      if (result.ok) {
+        // Show the cleaned-up values (trimmed, "@" removed) until the saved profile arrives.
+        setDraft((d) => ({ ...d, ...parsed.data }));
+        setStatus({ status: "notice", message: "Profile saved. Your changes show across your account." });
+      } else {
+        setStatus({ status: "error", message: result.message });
+        if ("fieldErrors" in result && result.fieldErrors) {
+          setErrors(result.fieldErrors);
+          focusFirstError();
+        }
+      }
+    });
   }
 
   return (
@@ -115,13 +110,12 @@ function ProfileEditor({
       <AccountCard title="Photo & identity">
         <div className="flex flex-col gap-6 sm:flex-row sm:items-center">
           <div className="relative w-fit">
-            <Image
-              src={draft.avatar}
+            <UserAvatar
+              src={draft.avatarUrl}
+              name={draft.fullName}
               alt="Your profile photo"
-              width={192}
-              height={192}
-              unoptimized={draft.avatar.startsWith("data:")}
-              className={`size-24 rounded-full object-cover ring-4 ring-brand/15 transition sm:size-28 ${busyPhoto ? "opacity-50" : ""}`}
+              pixels={192}
+              className={`size-24 text-2xl ring-4 ring-brand/15 transition sm:size-28 ${busyPhoto ? "opacity-50" : ""}`}
             />
             <button
               type="button"
@@ -166,6 +160,7 @@ function ProfileEditor({
               placeholder="City, country"
               value={draft.location}
               onChange={(e) => set("location", e.target.value)}
+              error={errors.location}
             />
           </div>
 
@@ -270,10 +265,12 @@ function ProfileEditor({
       </AccountCard>
 
       <div className="sticky bottom-4 z-10 flex items-center justify-end gap-3 rounded-2xl border border-border bg-background/90 p-3 shadow-[0_12px_40px_-12px_rgb(0_0_0/0.25)] backdrop-blur-xl">
-        <p className="mr-auto pl-2 text-sm text-muted-foreground">{dirty ? "You have unsaved changes" : "All changes saved"}</p>
+        <p className="mr-auto pl-2 text-sm text-muted-foreground" aria-live="polite">
+          {saving ? "Saving…" : dirty ? "You have unsaved changes" : "All changes saved"}
+        </p>
         <button
           type="button"
-          disabled={!dirty}
+          disabled={!dirty || saving}
           onClick={() => {
             setDraft(initial);
             setErrors({});
@@ -284,10 +281,13 @@ function ProfileEditor({
         </button>
         <button
           type="submit"
-          disabled={!dirty || busyPhoto}
-          className="h-10 rounded-lg bg-[#18181b] px-5 text-sm font-semibold text-white transition hover:bg-[#27272a] disabled:opacity-40 dark:bg-foreground dark:text-background"
+          disabled={!dirty || busyPhoto || saving}
+          className="inline-flex h-10 items-center gap-2 rounded-lg bg-[#18181b] px-5 text-sm font-semibold text-white transition hover:bg-[#27272a] disabled:opacity-40 dark:bg-foreground dark:text-background"
         >
-          Save changes
+          {saving && (
+            <span aria-hidden="true" className="size-3.5 animate-spin rounded-full border-2 border-current border-r-transparent motion-reduce:animate-none" />
+          )}
+          {saving ? "Saving…" : "Save changes"}
         </button>
       </div>
     </form>

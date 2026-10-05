@@ -3,11 +3,12 @@ import Link from "next/link";
 import { PlusIcon } from "@/components/icons";
 import { BlogManager } from "@/components/studio/blog-manager";
 import { StudioPageHeader, primaryButton } from "@/components/studio/ui";
-import { getStudioPostSeed } from "@/lib/studio";
+import { getStudioPosts } from "@/lib/db/studio/posts";
 
 export const metadata: Metadata = { title: "Blog" };
 
-export default function StudioBlogPage() {
+export default async function StudioBlogPage() {
+  const posts = await getStudioPosts();
   return (
     <main className="flex-1 px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
       <div className="mx-auto max-w-[90rem] space-y-6">
@@ -21,7 +22,7 @@ export default function StudioBlogPage() {
             </Link>
           }
         />
-        <BlogManager seed={getStudioPostSeed()} />
+        <BlogManager seed={posts} />
       </div>
     </main>
   );

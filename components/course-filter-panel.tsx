@@ -78,7 +78,6 @@ export function CourseFilterPanel({ facets }: { facets: Facets }) {
         aria-modal={drawerOpen || undefined}
         aria-labelledby={drawerOpen ? "filters-title" : undefined}
         onKeyDown={trapFocus}
-        data-lenis-prevent
         className={`max-lg:fixed max-lg:inset-y-0 max-lg:left-0 max-lg:z-[80] max-lg:flex max-lg:w-[min(22rem,88vw)] max-lg:flex-col max-lg:bg-background max-lg:shadow-2xl max-lg:duration-300 max-lg:ease-[cubic-bezier(0.22,1,0.36,1)] lg:max-h-[calc(100dvh-8rem)] lg:overflow-y-auto lg:overscroll-contain lg:rounded-2xl lg:border lg:border-black/[0.06] lg:bg-card lg:shadow-[0_8px_30px_-6px_rgb(0_0_0/0.08)] lg:[scrollbar-width:thin] dark:lg:border-white/10 ${
           // Visible at once when opening (so focus can move in), hidden only after the slide-out ends.
           drawerOpen

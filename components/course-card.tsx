@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import type { Course } from "@/lib/content";
 import { findTopic, formatDuration } from "@/lib/course-taxonomy";
+import { plans } from "@/lib/plans";
 import { ClockIcon, StarIcon, UsersIcon } from "./icons";
 
 /*
@@ -42,14 +43,23 @@ export function CourseCard({
         <span className="absolute top-3 left-3 rounded-full bg-white/90 px-2.5 py-1 text-xs font-medium text-neutral-900 shadow-sm backdrop-blur-sm max-sm:view-list:top-1.5 max-sm:view-list:left-1.5 max-sm:view-list:px-1.5 max-sm:view-list:py-0.5 max-sm:view-list:text-[0.625rem]">
           {course.level}
         </span>
+        <span
+          className={`absolute top-3 right-3 rounded-full px-2.5 py-1 text-xs font-semibold shadow-sm backdrop-blur-sm max-sm:view-list:hidden ${
+            course.access === "warm-up" ? "bg-brand text-white" : "bg-neutral-900/80 text-white"
+          }`}
+        >
+          {course.access === "warm-up" ? "Free" : (plans.find((p) => p.slug === course.access)?.name ?? course.access)}
+        </span>
       </div>
 
       <div className="flex min-w-0 flex-1 flex-col px-2 pt-4 pb-2 view-list:px-0 view-list:py-1 sm:view-list:py-3 sm:view-list:pr-3">
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-brand max-sm:view-list:gap-x-3 max-sm:view-list:text-[0.8125rem]">
-          <span className="inline-flex items-center gap-1.5">
-            <UsersIcon className="size-4 max-sm:view-list:size-3.5" />
-            {course.students.toLocaleString("en-US")} Students
-          </span>
+          {course.students > 0 && (
+            <span className="inline-flex items-center gap-1.5">
+              <UsersIcon className="size-4 max-sm:view-list:size-3.5" />
+              {course.students.toLocaleString("en-US")} {course.students === 1 ? "Student" : "Students"}
+            </span>
+          )}
           <span className="inline-flex items-center gap-1.5">
             <ClockIcon className="size-4 max-sm:view-list:size-3.5" />
             <span className="sr-only">Duration: </span>
@@ -84,14 +94,20 @@ export function CourseCard({
               <span className="truncate">{course.instructor.name}</span>
             </span>
             <span aria-hidden="true" className="hidden size-1 shrink-0 rounded-full bg-foreground/20 sm:view-list:block" />
-            <p className="flex items-center gap-1 text-sm whitespace-nowrap">
-              <StarIcon fill="currentColor" className="size-4 text-accent-amber" />
-              <span className="font-medium text-foreground">
-                {course.rating.toFixed(1)}
-                <span className="sr-only"> out of 5</span>
-              </span>
-              <span className="text-muted-foreground">({course.reviews.toLocaleString("en-US")} reviews)</span>
-            </p>
+            {course.reviews > 0 ? (
+              <p className="flex items-center gap-1 text-sm whitespace-nowrap">
+                <StarIcon fill="currentColor" className="size-4 text-accent-amber" />
+                <span className="font-medium text-foreground">
+                  {course.rating.toFixed(1)}
+                  <span className="sr-only"> out of 5</span>
+                </span>
+                <span className="text-muted-foreground">
+                  ({course.reviews.toLocaleString("en-US")} {course.reviews === 1 ? "review" : "reviews"})
+                </span>
+              </p>
+            ) : (
+              <p className="rounded-full bg-brand/10 px-2.5 py-0.5 text-xs font-semibold text-brand-deep dark:text-brand">New</p>
+            )}
           </div>
           <Link
             href={href}

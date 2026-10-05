@@ -5,42 +5,57 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { postCategories } from "@/lib/post-categories";
 import { postChecks, type PostStatus, type StudioPost } from "@/lib/studio-blog";
-import { slugify, uid, wordCount } from "@/lib/studio-courses";
-import { useCollection } from "@/lib/studio-store";
+import { savePost } from "@/app/(studio)/studio/blog/actions";
+import { slugify, uid, wordCount, type InstructorOption } from "@/lib/studio-courses";
 import { ArrowUpRightIcon, CheckIcon } from "../icons";
 import { postStatusBadge } from "./blog-manager";
-import { ThumbnailPicker } from "./course-fields";
+import { InstructorSelect, ThumbnailPicker } from "./course-fields";
 import { DescriptionEditor } from "./description-editor";
 import { TagInput } from "./tag-input";
 import { Field, Input, Panel, Select, Textarea, primaryButton, secondaryButton } from "./ui";
 
 const today = () => new Date().toISOString().slice(0, 10);
 
-export function PostEditor({ seed, postId, author }: { seed: StudioPost[]; postId?: string; author: StudioPost["author"] }) {
-  const { items } = useCollection("posts", seed);
-  const existing = postId ? items.find((p) => p.id === postId) : undefined;
-  // Created once, so a new post keeps the same id across re-renders.
-  const [fresh] = useState<StudioPost>(() => ({
-    id: uid(),
-    slug: "",
-    title: "",
-    excerpt: "",
-    body: "",
-    category: "",
-    keywords: [],
-    cover: "",
-    status: "draft",
-    publishAt: today(),
-    author,
-    updatedAt: new Date().toISOString(),
-  }));
+export function PostEditor({
+  post,
+  missing = false,
+  authors,
+  defaultCategory,
+  takenSlugs,
+}: {
+  post: StudioPost | null;
+  missing?: boolean;
+  authors: InstructorOption[];
+  /** Studio → Settings → Blog → default category for new posts */
+  defaultCategory: string;
+  takenSlugs: string[];
+}) {
+  // Created once, so a new post keeps the same temporary id across re-renders.
+  const [fresh] = useState<StudioPost>(() => {
+    const author = authors[0];
+    return {
+      id: uid(),
+      slug: "",
+      title: "",
+      excerpt: "",
+      body: "",
+      category: (postCategories.find((c) => c.slug === defaultCategory)?.slug ?? "") as StudioPost["category"],
+      keywords: [],
+      cover: "",
+      status: "draft",
+      publishAt: today(),
+      authorId: author?.id ?? null,
+      author: author ? { name: author.name, email: author.email, image: author.image } : { name: "Ultimate Deejays", email: "", image: "" },
+      updatedAt: new Date().toISOString(),
+    };
+  });
 
-  if (postId && !existing) {
+  if (missing) {
     return (
       <Panel>
         <div className="py-10 text-center">
           <p className="text-lg font-semibold text-foreground">Post not found</p>
-          <p className="mt-1 text-sm text-muted-foreground">It may have been deleted, or it was created in another browser.</p>
+          <p className="mt-1 text-sm text-muted-foreground">It may have been deleted. Check Studio → Blog.</p>
           <Link href="/studio/blog" className={`${primaryButton} mt-5`}>
             Back to posts
           </Link>
@@ -49,26 +64,25 @@ export function PostEditor({ seed, postId, author }: { seed: StudioPost[]; postI
     );
   }
 
-  const initial = existing ?? fresh;
-
-  return <Editor key={initial.id} seed={seed} initial={initial} isNew={!existing} />;
+  const initial = post ?? fresh;
+  return <Editor key={initial.id} initial={initial} isNew={!post} authors={authors} takenSlugs={takenSlugs} />;
 }
 
-function Editor({ seed, initial, isNew }: { seed: StudioPost[]; initial: StudioPost; isNew: boolean }) {
+function Editor({ initial, isNew, authors, takenSlugs }: { initial: StudioPost; isNew: boolean; authors: InstructorOption[]; takenSlugs: string[] }) {
   const router = useRouter();
   const saved = useSearchParams().get("saved");
-  const savedMessages: Record<string, string> = {"published":"Post published.","scheduled":"Post scheduled.","draft":"Draft saved."};
-  const { items, save } = useCollection("posts", seed);
+  const savedMessages: Record<string, string> = { published: "Post published.", scheduled: "Post scheduled.", draft: "Draft saved." };
   const [draft, setDraft] = useState(initial);
   const [savedJson, setSavedJson] = useState(() => JSON.stringify(initial));
   const [slugTouched, setSlugTouched] = useState(!isNew);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ tone: "ok" | "error"; text: string } | null>(saved && savedMessages[saved] ? { tone: "ok", text: savedMessages[saved] } : null);
 
   const dirty = JSON.stringify(draft) !== savedJson;
   const checks = postChecks(draft);
   const words = wordCount(draft.body);
-  const slugTaken = items.some((p) => p.id !== draft.id && p.slug === draft.slug);
+  const slugTaken = takenSlugs.includes(draft.slug);
 
   const set = <K extends keyof StudioPost>(key: K, value: StudioPost[K]) => {
     setDraft((d) => ({ ...d, [key]: value }));
@@ -85,7 +99,7 @@ function Editor({ seed, initial, isNew }: { seed: StudioPost[]; initial: StudioP
     return () => window.removeEventListener("beforeunload", onLeave);
   }, [dirty]);
 
-  function submit(status: PostStatus) {
+  async function submit(status: PostStatus) {
     const next = { ...draft, status, slug: draft.slug || slugify(draft.title) };
     const found: Record<string, string> = {};
     if (next.title.trim().length < 10) found.title = "Write a title of at least 10 characters.";
@@ -105,18 +119,19 @@ function Editor({ seed, initial, isNew }: { seed: StudioPost[]; initial: StudioP
       return;
     }
     if (status === "published" && initial.status !== "published") next.publishAt = today();
-    try {
-      save(next);
-      setDraft(next);
-      setSavedJson(JSON.stringify(next));
-      setMessage({
-        tone: "ok",
-        text: status === "published" ? "Post published." : status === "scheduled" ? `Scheduled for ${next.publishAt}.` : "Draft saved.",
-      });
-      if (isNew) router.replace(`/studio/blog/${next.id}/edit?saved=${status}`);
-    } catch (error) {
-      setMessage({ tone: "error", text: (error as Error).message });
-    }
+
+    setBusy(true);
+    const result = await savePost(next).catch(() => ({ ok: false as const, error: "We couldn't reach the server. Your changes are kept here; try again." }));
+    setBusy(false);
+    if (!result.ok) return setMessage({ tone: "error", text: result.error });
+
+    if (isNew) return router.replace(`/studio/blog/${result.record.id}/edit?saved=${status}`);
+    setDraft(result.record);
+    setSavedJson(JSON.stringify(result.record));
+    setMessage({
+      tone: "ok",
+      text: status === "published" ? "Post published." : status === "scheduled" ? `Scheduled for ${next.publishAt}.` : "Draft saved.",
+    });
   }
 
   const publishLabel = draft.status === "published" ? "Update post" : "Publish now";
@@ -190,15 +205,15 @@ function Editor({ seed, initial, isNew }: { seed: StudioPost[]; initial: StudioP
               <Input id="publishAt" type="date" value={draft.publishAt} onChange={(e) => set("publishAt", e.target.value)} aria-invalid={errors.publishAt ? true : undefined} className="dark:[color-scheme:dark]" />
             </Field>
             <div className="grid grid-cols-2 gap-2">
-              <button type="button" onClick={() => submit("draft")} className={secondaryButton}>
+              <button type="button" disabled={busy} onClick={() => submit("draft")} className={secondaryButton}>
                 {draft.status === "draft" ? "Save draft" : "Unpublish"}
               </button>
               {draft.publishAt > today() && draft.status !== "published" ? (
-                <button type="button" onClick={() => submit("scheduled")} className={primaryButton}>
+                <button type="button" disabled={busy} onClick={() => submit("scheduled")} className={primaryButton}>
                   Schedule
                 </button>
               ) : (
-                <button type="button" onClick={() => submit("published")} className={primaryButton}>
+                <button type="button" disabled={busy} onClick={() => submit("published")} className={primaryButton}>
                   {publishLabel}
                 </button>
               )}
@@ -223,6 +238,20 @@ function Editor({ seed, initial, isNew }: { seed: StudioPost[]; initial: StudioP
                 ))}
               </Select>
             </Field>
+            <Field label="Author" htmlFor="author" hint="Shown on the post with their photo and bio.">
+              <InstructorSelect
+                id="author"
+                value={draft.authorId}
+                options={authors}
+                onChange={(option) =>
+                  setDraft((d) => ({
+                    ...d,
+                    authorId: option?.id ?? null,
+                    author: option ? { name: option.name, email: option.email, image: option.image } : { name: "Ultimate Deejays", email: "", image: "" },
+                  }))
+                }
+              />
+            </Field>
             <Field label="Keywords" htmlFor="keywords" hint="Press Enter or comma after each. Used for search and SEO.">
               <TagInput id="keywords" tags={draft.keywords} onChange={(v) => set("keywords", v)} placeholder="e.g. beatmatching" />
             </Field>
@@ -230,7 +259,7 @@ function Editor({ seed, initial, isNew }: { seed: StudioPost[]; initial: StudioP
         </Panel>
 
         <Panel title="Cover image">
-          <ThumbnailPicker id="cover" value={draft.cover} onChange={(src) => set("cover", src)} invalid={!!errors.cover} />
+          <ThumbnailPicker id="cover" folder="blog" size={{ width: 1440, height: 1008 }} value={draft.cover} onChange={(src) => set("cover", src)} invalid={!!errors.cover} />
           {errors.cover && <p className="mt-2 text-sm text-red-600 dark:text-red-400">{errors.cover}</p>}
         </Panel>
 

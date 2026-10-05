@@ -3,10 +3,11 @@
 import { useCallback, useSyncExternalStore } from "react";
 
 /*
- * Lesson progress and notes, saved in this browser's localStorage. Components
+ * Lesson progress and notes in this browser's localStorage. Components
  * subscribe through useSyncExternalStore, so every part of the page stays in
- * sync (and other tabs too, via the storage event). When accounts exist, swap
- * read/write for API calls and keep the hooks' shape.
+ * sync (and other tabs too, via the storage event). Progress is also saved to
+ * the student's account (app/(learn)/courses/actions.ts) and merged back in
+ * here, so it follows them between devices; notes stay on the device.
  */
 
 const listeners = new Set<() => void>();
@@ -58,6 +59,20 @@ export function useCompletedLessons(courseSlug: string) {
   );
 
   return { completed, setDone };
+}
+
+/** This browser's finished lessons for a course, read now (outside React). */
+export const readCompletedLessons = (courseSlug: string) => parseList(read(`ud:progress:${courseSlug}`, EMPTY));
+
+/**
+ * Adds lessons finished elsewhere (the student's account, another device) to
+ * this browser's progress. Never removes any: un-ticking is done one lesson at a time.
+ */
+export function mergeCompletedLessons(courseSlug: string, slugs: string[]) {
+  const key = `ud:progress:${courseSlug}`;
+  const current = parseList(read(key, EMPTY));
+  const merged = [...new Set([...current, ...slugs])];
+  if (merged.length !== current.length) write(key, JSON.stringify(merged));
 }
 
 /** Completed lesson slugs for every course with progress, keyed by course slug. */

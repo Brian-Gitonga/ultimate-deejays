@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useActionState, useRef } from "react";
 import { logIn } from "@/app/(auth)/actions";
-import { initialAuthState } from "@/lib/auth";
+import { HOME_AFTER_AUTH, initialAuthState, type AuthFormState } from "@/lib/auth";
 import {
   FormMessage,
   GoogleButton,
@@ -14,14 +14,15 @@ import {
   useFieldErrors,
 } from "./auth-form-parts";
 
-export function LoginForm() {
-  const [state, formAction, pending] = useActionState(logIn, initialAuthState);
+export function LoginForm({ next, initialError }: { next: string; initialError?: string }) {
+  const [state, formAction, pending] = useActionState<AuthFormState, FormData>(logIn, initialError ? { status: "error", message: initialError } : initialAuthState);
   const formRef = useRef<HTMLFormElement>(null);
   const { errorFor, markEdited } = useFieldErrors(state, formRef);
 
   return (
     <form ref={formRef} action={formAction} noValidate className="space-y-5">
       <FormMessage state={state} />
+      <input type="hidden" name="next" value={next} />
 
       <TextField
         name="email"
@@ -74,7 +75,7 @@ export function LoginForm() {
       <p className="pt-1 text-center text-[0.9375rem] text-muted-foreground">
         New to Ultimate Deejays?{" "}
         <Link
-          href="/sign-up"
+          href={next === HOME_AFTER_AUTH ? "/sign-up" : `/sign-up?next=${encodeURIComponent(next)}`}
           className="font-semibold text-foreground underline decoration-foreground/25 underline-offset-4 transition hover:text-brand hover:decoration-brand"
         >
           Create an account

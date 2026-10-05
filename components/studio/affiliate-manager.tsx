@@ -3,9 +3,9 @@
 import Link from "next/link";
 import { useId, useState } from "react";
 import { affiliateStatusLabel, balanceOf, type Affiliate, type AffiliateStatus } from "@/lib/affiliates";
-import { plans } from "@/lib/plans";
-import { settingsSeed } from "@/lib/site-settings";
-import { useCollection } from "@/lib/studio-store";
+import { saveAffiliate } from "@/app/(studio)/studio/affiliates/actions";
+import { referralUrl } from "@/lib/affiliate-links";
+import { useServerCollection } from "@/lib/studio-store";
 import {
   ArrowUpRightIcon,
   CheckIcon,
@@ -27,14 +27,10 @@ import { ConfirmDialog, ManageTable, RowMenu, useToast } from "./manage-table";
 import { statusMeta } from "./status";
 import { Avatar } from "./student-manager";
 import { Kpi, Panel, Textarea, primaryButton, secondaryButton } from "./ui";
+import { useMoney, usePlanPrices } from "../money-context";
 
-const usd = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
-const usd0 = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
 const compact = new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 });
 const date = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
-const referralBase = `${process.env.NEXT_PUBLIC_SITE_URL ?? "https://ultimatedeejays.com"}/?ref=`;
-const resident = plans.find((p) => p.slug === "resident")!;
-const headliner = plans.find((p) => p.slug === "headliner")!;
 
 // Affiliate states reuse the studio status colours; each badge carries an icon and a label.
 const statusStyle: Record<AffiliateStatus, { pill: string; icon: typeof CheckIcon }> = {
@@ -65,10 +61,9 @@ function relative(iso: string, today: string) {
   return date.format(new Date(iso));
 }
 
-export function AffiliateManager({ seed, today }: { seed: Affiliate[]; today: string }) {
-  const { items, save } = useCollection("affiliates", seed);
-  const { items: settings } = useCollection("settings", settingsSeed);
-  const defaultRate = settings[0]?.affiliates?.defaultCommission ?? 20;
+export function AffiliateManager({ seed, today, defaultRate, defaultDiscount }: { seed: Affiliate[]; today: string; defaultRate: number; defaultDiscount: number }) {
+  const { exact: money, whole: wholeMoney } = useMoney();
+  const { items, save } = useServerCollection(seed, { save: saveAffiliate });
   const [openId, setOpenId] = useState<string | null>(null);
   const [rejecting, setRejecting] = useState<Affiliate | null>(null);
   const [paying, setPaying] = useState<Affiliate | null>(null);
@@ -84,8 +79,7 @@ export function AffiliateManager({ seed, today }: { seed: Affiliate[]; today: st
   const earned = partners.reduce((s, a) => s + a.earned, 0);
 
   function update(a: Affiliate, patch: Partial<Affiliate>, message: string) {
-    save({ ...a, ...patch });
-    show(message);
+    save({ ...a, ...patch }).then((saved) => saved && show(message));
   }
 
   const approve = (a: Affiliate, commission: number) =>
@@ -93,7 +87,7 @@ export function AffiliateManager({ seed, today }: { seed: Affiliate[]; today: st
 
   async function copyLink(a: Affiliate) {
     try {
-      await navigator.clipboard.writeText(referralBase + a.code);
+      await navigator.clipboard.writeText(referralUrl(a.code));
       show("Referral link copied");
     } catch {
       show("Couldn't copy the link");
@@ -105,8 +99,8 @@ export function AffiliateManager({ seed, today }: { seed: Affiliate[]; today: st
       <ul className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
         <Kpi icon={HandshakeIcon} label="Active affiliates" value={String(active.length)} note={`${items.filter((a) => a.status === "paused").length} paused`} />
         <Kpi icon={ClockIcon} label="Waiting for approval" value={String(pending.length)} note={pending.length ? `Newest ${relative(pending[0].appliedAt, today).toLowerCase()}` : "All caught up"} />
-        <Kpi icon={TrendUpIcon} label="Referred sales" value={usd0.format(revenue)} note={`${sales} sales from affiliate links`} />
-        <Kpi icon={WalletIcon} label="Commission owed" value={usd.format(owed)} note={`${usd0.format(earned)} earned in total`} />
+        <Kpi icon={TrendUpIcon} label="Referred sales" value={wholeMoney(revenue)} note={`${sales} sales from affiliate links`} />
+        <Kpi icon={WalletIcon} label="Commission owed" value={money(owed)} note={`${wholeMoney(earned)} earned in total`} />
       </ul>
 
       <Panel
@@ -181,13 +175,13 @@ export function AffiliateManager({ seed, today }: { seed: Affiliate[]; today: st
             sort: conversion,
             render: (a) => <span className="text-muted-foreground tabular-nums">{a.clicks ? `${conversion(a).toFixed(1)}%` : "—"}</span>,
           },
-          { key: "revenue", header: "Referred", align: "right", sort: (a) => a.revenue, render: (a) => <span className="tabular-nums">{usd0.format(a.revenue)}</span> },
+          { key: "revenue", header: "Referred", align: "right", sort: (a) => a.revenue, render: (a) => <span className="tabular-nums">{wholeMoney(a.revenue)}</span> },
           {
             key: "balance",
             header: "Owed",
             align: "right",
             sort: balanceOf,
-            render: (a) => <span className={`tabular-nums ${balanceOf(a) > 0 ? "font-semibold text-foreground" : "text-muted-foreground"}`}>{usd.format(balanceOf(a))}</span>,
+            render: (a) => <span className={`tabular-nums ${balanceOf(a) > 0 ? "font-semibold text-foreground" : "text-muted-foreground"}`}>{money(balanceOf(a))}</span>,
           },
           { key: "status", header: "Status", sort: (a) => a.status, render: (a) => <AffiliateBadge status={a.status} /> },
         ]}
@@ -198,7 +192,7 @@ export function AffiliateManager({ seed, today }: { seed: Affiliate[]; today: st
               { label: "View details", icon: EyeIcon, onSelect: () => setOpenId(a.id) },
               a.status === "pending" && { label: `Approve at ${defaultRate}%`, icon: CheckIcon, onSelect: () => approve(a, defaultRate) },
               !!a.approvedAt && { label: "Copy referral link", icon: LinkIcon, onSelect: () => copyLink(a) },
-              balanceOf(a) > 0 && { label: `Mark ${usd.format(balanceOf(a))} paid`, icon: WalletIcon, onSelect: () => setPaying(a) },
+              balanceOf(a) > 0 && { label: `Mark ${money(balanceOf(a))} paid`, icon: WalletIcon, onSelect: () => setPaying(a) },
               { label: "Email", icon: MailIcon, href: `mailto:${a.email}`, external: true },
               a.status === "approved" && { label: "Pause", icon: PauseIcon, onSelect: () => update(a, { status: "paused" }, `${a.name} paused`) },
               a.status === "paused" && { label: "Reactivate", icon: CheckIcon, onSelect: () => update(a, { status: "approved" }, `${a.name} reactivated`) },
@@ -215,6 +209,7 @@ export function AffiliateManager({ seed, today }: { seed: Affiliate[]; today: st
           a={open}
           today={today}
           defaultRate={defaultRate}
+          defaultDiscount={defaultDiscount}
           onClose={() => setOpenId(null)}
           onSave={(patch, message) => update(open, patch, message)}
           onApprove={(rate) => approve(open, rate)}
@@ -242,7 +237,7 @@ export function AffiliateManager({ seed, today }: { seed: Affiliate[]; today: st
           a={paying}
           onCancel={() => setPaying(null)}
           onConfirm={() => {
-            update(paying, { paidOut: paying.earned }, `${usd.format(balanceOf(paying))} marked as paid to ${paying.name}`);
+            update(paying, { paidOut: paying.earned }, `${money(balanceOf(paying))} marked as paid to ${paying.name}`);
             setPaying(null);
           }}
         />
@@ -253,7 +248,7 @@ export function AffiliateManager({ seed, today }: { seed: Affiliate[]; today: st
   );
 }
 
-function RateInput({ id, value, onChange, label = "Commission" }: { id: string; value: number; onChange: (n: number) => void; label?: string }) {
+function RateInput({ id, value, onChange, label = "Commission", min = 1 }: { id: string; value: number; onChange: (n: number) => void; label?: string; min?: number }) {
   return (
     <div>
       <label htmlFor={id} className="text-xs font-medium text-muted-foreground">
@@ -263,11 +258,11 @@ function RateInput({ id, value, onChange, label = "Commission" }: { id: string; 
         <input
           id={id}
           type="number"
-          min={1}
+          min={min}
           max={90}
-          value={value || ""}
+          value={min === 0 ? value : value || ""}
           onChange={(e) => onChange(Number(e.target.value))}
-          onBlur={() => onChange(clampRate(value))}
+          onBlur={() => onChange(Math.min(90, Math.max(min, Math.round(value || 0))))}
           className="h-10 w-full rounded-lg border border-border bg-background pr-8 pl-3 text-sm font-semibold text-foreground tabular-nums outline-none focus:border-brand focus:ring-4 focus:ring-brand/15"
         />
         <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-muted-foreground">%</span>
@@ -333,6 +328,7 @@ function AffiliateDrawer({
   a,
   today,
   defaultRate,
+  defaultDiscount,
   onClose,
   onSave,
   onApprove,
@@ -343,6 +339,7 @@ function AffiliateDrawer({
   a: Affiliate;
   today: string;
   defaultRate: number;
+  defaultDiscount: number;
   onClose: () => void;
   onSave: (patch: Partial<Affiliate>, message: string) => void;
   onApprove: (rate: number) => void;
@@ -350,9 +347,16 @@ function AffiliateDrawer({
   onPay: () => void;
   onCopy: () => void;
 }) {
+  const { exact: money } = useMoney();
+  const prices = usePlanPrices();
+  const resident = prices.find((p) => p.slug === "resident")!;
+  const headliner = prices.find((p) => p.slug === "headliner")!;
   const id = useId();
   const [rate, setRate] = useState(a.status === "pending" ? defaultRate : a.commission);
   const [note, setNote] = useState(a.note);
+  const [discount, setDiscount] = useState<number | null>(a.customerDiscount);
+  const effectiveDiscount = discount ?? defaultDiscount;
+  const discountChanged = discount !== a.customerDiscount;
   const balance = balanceOf(a);
   const rateChanged = a.status !== "pending" && clampRate(rate) !== a.commission;
 
@@ -414,6 +418,34 @@ function AffiliateDrawer({
         </p>
       )}
 
+      {a.codeRequest && (
+        <div role="status" className="rounded-xl border border-[#c98200]/30 bg-[#c98200]/[0.07] px-4 py-3 text-sm text-foreground">
+          <p>
+            Asked to change their code from <span className="font-mono font-semibold">{a.code}</span> to{" "}
+            <span className="font-mono font-semibold">{a.codeRequest}</span>. Links with the old code stop counting, so let them know.
+          </p>
+          <button type="button" onClick={() => onSave({ code: a.codeRequest! }, `${a.name} now uses ${a.codeRequest}`)} className={`${primaryButton} mt-3 h-9`}>
+            Give them {a.codeRequest}
+          </button>
+        </div>
+      )}
+
+      {a.leaveRequestedAt && (
+        <div role="status" className="rounded-xl border border-red-500/25 bg-red-500/[0.06] px-4 py-3 text-sm text-foreground">
+          <p>Asked to leave the program on {date.format(new Date(a.leaveRequestedAt))}. Pay any cleared balance, then pause them.</p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {a.status === "approved" && (
+              <button type="button" onClick={() => onSave({ status: "paused", leaveRequestedAt: null }, `${a.name} paused`)} className={`${primaryButton} h-9`}>
+                <PauseIcon className="size-4" /> Pause them
+              </button>
+            )}
+            <button type="button" onClick={() => onSave({ leaveRequestedAt: null }, "Request dismissed")} className={`${secondaryButton} h-9`}>
+              Dismiss
+            </button>
+          </div>
+        </div>
+      )}
+
       {a.approvedAt && (
         <>
           <dl className="grid grid-cols-2 gap-3">
@@ -436,9 +468,9 @@ function AffiliateDrawer({
             </h3>
             <dl className="mt-3 space-y-2 text-sm">
               {[
-                ["Referred revenue", usd.format(a.revenue)],
-                ["Commission earned", usd.format(a.earned)],
-                ["Paid out", usd.format(a.paidOut)],
+                ["Referred revenue", money(a.revenue)],
+                ["Commission earned", money(a.earned)],
+                ["Paid out", money(a.paidOut)],
               ].map(([label, value]) => (
                 <div key={label} className="flex justify-between gap-4">
                   <dt className="text-muted-foreground">{label}</dt>
@@ -447,12 +479,16 @@ function AffiliateDrawer({
               ))}
               <div className="flex items-center justify-between gap-4 border-t border-border pt-2">
                 <dt className="font-semibold text-foreground">Owed now</dt>
-                <dd className="font-bold text-foreground tabular-nums">{usd.format(balance)}</dd>
+                <dd className="font-bold text-foreground tabular-nums">{money(balance)}</dd>
+              </div>
+              <div className="flex justify-between gap-4">
+                <dt className="text-muted-foreground">Pay to</dt>
+                <dd className="text-right text-foreground">{a.payoutTo || "Not set yet (ask them to add it in their dashboard)"}</dd>
               </div>
             </dl>
             {balance > 0 && (
               <button type="button" onClick={onPay} className={`${secondaryButton} mt-3 w-full`}>
-                <WalletIcon className="size-4" /> Mark {usd.format(balance)} as paid
+                <WalletIcon className="size-4" /> Mark {money(balance)} as paid
               </button>
             )}
           </section>
@@ -463,7 +499,7 @@ function AffiliateDrawer({
             </h3>
             <div className="mt-2 flex items-center gap-2 rounded-xl border border-border bg-muted/50 p-1.5 pl-3">
               <LinkIcon className="size-4 shrink-0 text-muted-foreground" />
-              <span className="min-w-0 flex-1 truncate font-mono text-xs text-foreground">{referralBase + a.code}</span>
+              <span className="min-w-0 flex-1 truncate font-mono text-xs text-foreground">{referralUrl(a.code)}</span>
               <button type="button" onClick={onCopy} className={`${secondaryButton} h-8 px-3`}>
                 <CopyIcon className="size-3.5" /> Copy
               </button>
@@ -496,12 +532,54 @@ function AffiliateDrawer({
           </div>
         </div>
         <p className="mt-3 text-sm text-muted-foreground">
-          Earns <span className="font-semibold text-foreground">{usd.format((resident.price * clampRate(rate)) / 100)}</span> per {resident.name} sale and{" "}
-          <span className="font-semibold text-foreground">{usd.format((headliner.price * clampRate(rate)) / 100)}</span> per {headliner.name} sale.
+          Earns <span className="font-semibold text-foreground">{money((resident.price * clampRate(rate)) / 100)}</span> per {resident.name} sale and{" "}
+          <span className="font-semibold text-foreground">{money((headliner.price * clampRate(rate)) / 100)}</span> per {headliner.name} sale.
         </p>
         {rateChanged && (
           <button type="button" onClick={() => onSave({ commission: clampRate(rate) }, `Commission for ${a.name} set to ${clampRate(rate)}%`)} className={`${primaryButton} mt-3`}>
             Save {clampRate(rate)}% commission
+          </button>
+        )}
+      </section>
+
+      <section aria-labelledby={`${id}-discount-h`}>
+        <h3 id={`${id}-discount-h`} className="text-sm font-semibold text-foreground">
+          Buyer discount
+        </h3>
+        <p className="mt-0.5 text-sm text-muted-foreground">Taken off for buyers who use their code or come through their link.</p>
+        <div className="mt-3 flex flex-wrap items-end gap-2">
+          <div className="w-24">
+            <RateInput id={`${id}-discount`} min={0} value={effectiveDiscount} onChange={(n) => setDiscount(Math.min(90, Math.max(0, Math.round(n || 0))))} label="Discount" />
+          </div>
+          <div className="flex flex-wrap gap-1.5 pb-0.5" role="group" aria-label="Quick discounts">
+            {[0, 5, 10, 15, 20].map((n) => (
+              <button
+                key={n}
+                type="button"
+                onClick={() => setDiscount(n)}
+                aria-pressed={discount === n}
+                className={`h-9 rounded-lg px-2.5 text-sm font-medium tabular-nums transition ${discount === n ? "bg-foreground text-background" : "bg-foreground/[0.06] text-foreground hover:bg-foreground/10"}`}
+              >
+                {n}%
+              </button>
+            ))}
+            <button
+              type="button"
+              onClick={() => setDiscount(null)}
+              aria-pressed={discount === null}
+              className={`h-9 rounded-lg px-2.5 text-sm font-medium transition ${discount === null ? "bg-foreground text-background" : "bg-foreground/[0.06] text-foreground hover:bg-foreground/10"}`}
+            >
+              Default ({defaultDiscount}%)
+            </button>
+          </div>
+        </div>
+        {discountChanged && (
+          <button
+            type="button"
+            onClick={() => onSave({ customerDiscount: discount }, discount === null ? `${a.name} uses the default discount` : `Buyer discount for ${a.name} set to ${discount}%`)}
+            className={`${primaryButton} mt-3`}
+          >
+            Save {effectiveDiscount}% discount
           </button>
         )}
       </section>
@@ -566,12 +644,13 @@ function AffiliateDrawer({
 }
 
 function PayDialog({ a, onCancel, onConfirm }: { a: Affiliate; onCancel: () => void; onConfirm: () => void }) {
+  const { exact: money } = useMoney();
   const id = useId();
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-neutral-950/50 p-4 backdrop-blur-sm" onClick={onCancel} onKeyDown={(e) => e.key === "Escape" && onCancel()}>
       <div role="dialog" aria-modal="true" aria-labelledby={`${id}-t`} onClick={(e) => e.stopPropagation()} className="w-full max-w-md rounded-2xl bg-background p-6 shadow-2xl">
         <h2 id={`${id}-t`} className="text-lg font-semibold text-foreground">
-          Mark {usd.format(balanceOf(a))} as paid?
+          Mark {money(balanceOf(a))} as paid?
         </h2>
         <p className="mt-2 text-sm text-muted-foreground">
           Do this after you&apos;ve sent the money to {a.name}. Their balance goes back to $0 and they get an email receipt.

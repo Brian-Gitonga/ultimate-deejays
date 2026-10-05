@@ -162,12 +162,6 @@ html {
   }
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  html {
-    scroll-behavior: smooth;
-  }
-}
-
 body {
   background: var(--background);
   color: var(--foreground);
@@ -262,27 +256,22 @@ body {
   display: none;
 }
 
+
 /*
- * Fades content up as it scrolls into view. Uses scroll-driven animations, so
- * browsers without support (or with reduced motion) simply show the content.
+ * The logo is one vector file (public/brand), painted with the current text
+ * colour so it can follow light and dark mode. aspect-ratio keeps the
+ * wordmark's proportions; set its height, the width follows.
  */
-@keyframes reveal-up {
-  from {
-    opacity: 0;
-    transform: translateY(32px);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
+.logo-mask {
+  aspect-ratio: 2541 / 828;
+  background-color: currentColor;
+  -webkit-mask: url("/brand/logo-mask.svg") center / contain no-repeat;
+  mask: url("/brand/logo-mask.svg") center / contain no-repeat;
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  @supports (animation-timeline: view()) {
-    .reveal {
-      animation: reveal-up linear both;
-      animation-timeline: view();
-      animation-range: entry 0% entry 45%;
-    }
-  }
+.logo-mark-mask {
+  aspect-ratio: 1;
+  background-color: currentColor;
+  -webkit-mask: url("/brand/mark.svg") center / contain no-repeat;
+  mask: url("/brand/mark.svg") center / contain no-repeat;
 }

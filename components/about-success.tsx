@@ -1,12 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
-import { courseCount } from "@/lib/content";
-
-const stats = [
-  { value: String(courseCount), label: "Courses" },
-  { value: "2k+", label: "Students" },
-  { value: "300+", label: "Graduates Booked" },
-];
+import { getSiteStats, studentsLabel } from "@/lib/db/stats";
 
 const graduates = [
   { src: "/images/about/graduate-first-residency.jpg", alt: "Student DJ smiling while mixing on a controller" },
@@ -14,13 +8,19 @@ const graduates = [
   { src: "/images/about/graduate-headphones.jpg", alt: "Smiling DJ holding his headphones in a club" },
 ];
 
-export function AboutSuccess() {
+export async function AboutSuccess() {
+  const s = await getSiteStats();
+  const stats = [
+    s.students > 0 && { value: studentsLabel(s.students), label: "Students" },
+    s.courses > 0 && { value: String(s.courses), label: "Courses" },
+    s.freeLessons > 0 && { value: String(s.freeLessons), label: "Free lessons" },
+  ].filter((x): x is { value: string; label: string } => !!x);
   return (
     <section aria-labelledby="success-title" className="relative isolate py-16 lg:py-24">
       <div aria-hidden="true" className="glow-success fade-y absolute inset-0 -z-10" />
 
       <div className="site-container grid items-center gap-12 lg:grid-cols-[0.95fr_2fr] lg:gap-16">
-        <div className="reveal">
+        <div>
           <h2
             id="success-title"
             className="text-[1.75rem] leading-tight font-bold tracking-tight text-balance text-foreground sm:text-[2rem]"
@@ -29,8 +29,7 @@ export function AboutSuccess() {
           </h2>
           <p className="mt-4 text-base leading-relaxed text-pretty text-muted-foreground sm:text-[1.0625rem]">
             We don&apos;t count video views. We count first mixes recorded, first gigs booked and first crowds won over.
-            Every residency, wedding and festival slot our graduates land is proof the method works, and the reason we
-            keep raising the bar.
+            That&apos;s what every lesson is built for, and the reason we keep raising the bar as we grow.
           </p>
 
           <Link
@@ -50,7 +49,7 @@ export function AboutSuccess() {
           </dl>
         </div>
 
-        <div className="reveal grid grid-cols-3 gap-3 sm:gap-6">
+        <div className="grid grid-cols-3 gap-3 sm:gap-6">
           {graduates.map((photo) => (
             <div key={photo.src} className="relative aspect-[3/5] overflow-hidden rounded-2xl bg-muted">
               <Image

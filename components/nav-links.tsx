@@ -17,7 +17,9 @@ export function NavLinks({ links }: { links: NavLink[] }) {
         key={link.href}
         href={link.href}
         aria-current={active ? "page" : undefined}
-        className={`text-base transition-colors hover:text-brand ${active ? "font-medium text-brand" : "text-foreground"}`}
+        className={`rounded-full px-3.5 py-2 text-[0.9375rem] font-medium whitespace-nowrap transition-colors focus-visible:ring-2 focus-visible:ring-brand/40 focus-visible:outline-none ${
+          active ? "bg-brand/10 text-brand-deep dark:text-brand" : "text-foreground/70 hover:bg-foreground/[0.06] hover:text-foreground"
+        }`}
       >
         {link.label}
       </Link>

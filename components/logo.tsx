@@ -1,27 +1,40 @@
-import Link from "next/link";
+"use client";
 
-export function Logo() {
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import type { MouseEvent } from "react";
+
+/*
+ * The logo, which is also the way home: it opens the landing page, or on the
+ * landing page itself, takes you back to the top. It's the wordmark from
+ * public/brand/logo.svg, drawn in the deep green on light pages and the
+ * site's bright green on dark ones.
+ *
+ * Sizes (height; the width follows the logo's proportions):
+ *   sm  the header: 40px, 44px from sm up
+ *   md  footer and sign-in pages: 48px, 56px from sm up
+ *   xs  compact bars (course player, studio sidebar): 36px
+ */
+const sizes = { xs: "h-9", sm: "h-10 sm:h-11", md: "h-12 sm:h-14" } as const;
+
+export function Logo({ size = "md" }: { size?: keyof typeof sizes }) {
+  const pathname = usePathname();
+
+  function onClick(event: MouseEvent<HTMLAnchorElement>) {
+    // Ctrl/Cmd/Shift-click still opens a new tab or window as usual.
+    if (pathname !== "/" || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    event.preventDefault();
+    window.scrollTo({ top: 0 });
+  }
+
   return (
     <Link
       href="/"
+      onClick={onClick}
       aria-label="Ultimate Deejays home"
-      className="flex items-center gap-2 text-[1.375rem] font-extrabold tracking-tight text-foreground sm:text-2xl"
+      className="inline-flex shrink-0 items-center rounded-lg focus-visible:ring-2 focus-visible:ring-brand/50 focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none"
     >
-      {/* Vinyl record mark */}
-      <svg viewBox="0 0 32 32" className="size-8 text-brand" aria-hidden="true">
-        <circle cx="16" cy="16" r="13.5" fill="none" stroke="currentColor" strokeWidth="3" />
-        <path
-          d="M16 7.5a8.5 8.5 0 0 1 8.5 8.5"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-        />
-        <circle cx="16" cy="16" r="3.5" fill="currentColor" />
-      </svg>
-      <span>
-        Ultimate<span className="text-brand">Deejays</span>
-      </span>
+      <span aria-hidden="true" className={`logo-mask block text-[#037164] dark:text-brand ${sizes[size]}`} />
     </Link>
   );
 }

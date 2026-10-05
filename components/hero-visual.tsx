@@ -1,12 +1,12 @@
 import Image from "next/image";
 import type { ReactNode } from "react";
-import { ClockIcon, LessonIcon } from "./icons";
+import { LessonIcon, PlayIcon } from "./icons";
 
 /*
  * Every piece is positioned in % of a square box, so the whole composition
  * scales as one unit. Card text steps up once the box is ≥ 32rem wide (@lg).
  */
-export function HeroVisual() {
+export function HeroVisual({ courses, students, freeLessons }: { courses: number; students: string; freeLessons: number }) {
   return (
     <div className="@container relative mx-auto aspect-square w-full max-w-[43.75rem]">
       {/* Blue ring — a half arc sweeping from the bottom-left, over the top, to the top-right */}
@@ -51,16 +51,16 @@ export function HeroVisual() {
 
       {/* Floating stat cards */}
       <GlassCard className="left-0 top-[23%]">
-        <StatWithIcon icon={<LessonIcon />} value="12+" label="DJ Courses" />
+        <StatWithIcon icon={<LessonIcon />} value={String(courses)} label={courses === 1 ? "DJ Course" : "DJ Courses"} />
       </GlassCard>
 
       <GlassCard className="left-[75.9%] top-[11.2%] flex-col px-3 py-3 @lg:px-4 @lg:py-4">
-        <ProgressRing value={52} label="2k+" />
+        <ProgressRing value={75} label={students} />
         <span className="mt-1.5 text-xs text-foreground @lg:mt-2 @lg:text-[0.9375rem]">Students</span>
       </GlassCard>
 
       <GlassCard className="left-[57.2%] top-[85.6%]">
-        <StatWithIcon icon={<ClockIcon />} value="150+" label="Hours of Lessons" />
+        <StatWithIcon icon={<PlayIcon />} value={String(freeLessons)} label="Free Lessons" />
       </GlassCard>
     </div>
   );

@@ -4,7 +4,9 @@ import type { ReactNode } from "react";
 import { FaqAccordion, type FaqItem } from "@/components/faq-accordion";
 import { CheckIcon, CloseIcon, HeadphonesIcon, SparklesIcon, TrophyIcon } from "@/components/icons";
 import { PageHeader } from "@/components/page-header";
-import { comparison, plans, type Plan } from "@/lib/plans";
+import { getSiteSettings } from "@/lib/db/settings";
+import { currencyName, currencySymbol, moneyFormatter } from "@/lib/money";
+import { comparison, plans as basePlans, type Plan } from "@/lib/plans";
 import { siteName, siteUrl } from "@/lib/site";
 
 export const metadata: Metadata = {
@@ -14,7 +16,7 @@ export const metadata: Metadata = {
   alternates: { canonical: "/pricing" },
 };
 
-const faqs: FaqItem[] = [
+const faqsFor = ({ upgradeExample, guaranteeDays }: { upgradeExample: string | null; guaranteeDays: number }): FaqItem[] => [
   {
     question: "Is it really a one-time payment?",
     answer:
@@ -22,8 +24,9 @@ const faqs: FaqItem[] = [
   },
   {
     question: "Can I upgrade later?",
-    answer:
-      "Any time. You only pay the difference between your current plan and the new one, so moving from Resident to Headliner costs $70.",
+    answer: upgradeExample
+      ? `Any time. You only pay the difference between your current plan and the new one, so ${upgradeExample}.`
+      : "Any time, from the pricing page or any locked lesson.",
   },
   {
     question: "What gear do I need to start?",
@@ -32,7 +35,14 @@ const faqs: FaqItem[] = [
   },
   {
     question: "What if a plan isn't right for me?",
-    answer: "Paid plans come with a 30-day money-back guarantee. If it's not for you, contact us within 30 days for a full refund.",
+    answer: guaranteeDays
+      ? `Paid plans come with a ${guaranteeDays}-day money-back guarantee. If it's not for you, contact us within ${guaranteeDays} days for a full refund.`
+      : "Contact us and we'll help you find the right plan before you buy.",
+  },
+  {
+    question: "Do you have discount codes?",
+    answer:
+      "Sometimes. If a DJ or creator sent you here, their code is applied for you at checkout. You can also type a promo code on the checkout page before you pay.",
   },
   {
     question: "Do you offer discounts for students or groups?",
@@ -41,9 +51,21 @@ const faqs: FaqItem[] = [
   },
 ];
 
-const price = (n: number) => (n === 0 ? "$0" : `$${n}`);
-
-export default function PricingPage() {
+export default async function PricingPage() {
+  // Plans, copy and currency come from Studio → Settings → Pricing.
+  const settings = await getSiteSettings();
+  const plans: Plan[] = settings.plans.map((saved) => ({ ...basePlans.find((p) => p.slug === saved.slug)!, ...saved }));
+  const currency = settings.general.currency;
+  const price = moneyFormatter(currency);
+  const { heading, intro, guaranteeDays, showComparison, upgradeCredit } = settings.pricing;
+  const [, resident, headliner] = plans;
+  const faqs = faqsFor({
+    guaranteeDays,
+    upgradeExample:
+      upgradeCredit && resident && headliner && headliner.price > resident.price
+        ? `moving from ${resident.name} to ${headliner.name} costs ${price(headliner.price - resident.price)}`
+        : null,
+  });
   const offers = {
     "@context": "https://schema.org",
     "@type": "Product",
@@ -53,7 +75,7 @@ export default function PricingPage() {
       "@type": "Offer",
       name: `${plan.name} plan`,
       price: plan.price.toFixed(2),
-      priceCurrency: "USD",
+      priceCurrency: settings.general.currency,
       availability: "https://schema.org/InStock",
       url: new URL(plan.href, siteUrl).toString(),
     })),
@@ -71,34 +93,36 @@ export default function PricingPage() {
             One-time payment · Lifetime access
           </p>
           <h2 id="plans-title" className="mt-4 text-[1.75rem] leading-tight font-bold tracking-tight text-balance text-foreground sm:text-[2.25rem]">
-            Pay once. Keep mixing forever.
+            {heading}
           </h2>
-          <p className="mt-3 text-base text-pretty text-muted-foreground sm:text-[1.0625rem]">
-            No subscriptions and no monthly fees. Start free, then unlock the courses you need when you&apos;re ready to
-            level up.
-          </p>
+          <p className="mt-3 text-base text-pretty text-muted-foreground sm:text-[1.0625rem]">{intro}</p>
         </div>
 
         <ul className="mt-12 grid items-stretch gap-6 lg:grid-cols-3">
           {plans.map((plan) => (
             <li key={plan.slug}>
-              <PlanCard plan={plan} />
+              <PlanCard plan={plan} currency={currency} />
             </li>
           ))}
         </ul>
 
         <p className="mt-8 text-center text-sm text-muted-foreground">
-          All paid plans include a <span className="font-semibold text-foreground">30-day money-back guarantee</span>. Prices
-          in USD.
+          {guaranteeDays > 0 && (
+            <>
+              All paid plans include a <span className="font-semibold text-foreground">{guaranteeDays}-day money-back guarantee</span>.{" "}
+            </>
+          )}
+          Prices in {currencyName(currency)}.
         </p>
       </section>
 
+      {showComparison && (
       <section aria-labelledby="compare-title" className="border-y border-border bg-cream py-16 lg:py-24">
         <div className="site-container">
           <h2 id="compare-title" className="text-center text-[1.75rem] leading-tight font-bold tracking-tight text-foreground sm:text-[2rem]">
             Compare plans
           </h2>
-          <div className="mt-10 overflow-x-auto rounded-2xl border border-border bg-card" data-lenis-prevent-horizontal>
+          <div className="mt-10 overflow-x-auto rounded-2xl border border-border bg-card">
             <table className="w-full min-w-[40rem] text-left text-sm">
               <caption className="sr-only">Features included in each plan</caption>
               <thead>
@@ -148,6 +172,7 @@ export default function PricingPage() {
           </div>
         </div>
       </section>
+      )}
 
       <section aria-labelledby="pricing-faq-title" className="site-container grid gap-10 py-16 lg:grid-cols-[0.8fr_1.2fr] lg:gap-16 lg:py-24">
         <div>
@@ -164,7 +189,7 @@ export default function PricingPage() {
           </p>
           <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-1">
             <Assurance icon={<HeadphonesIcon className="size-5" />} title="Learn at your pace" text="Lifetime access, on any device." />
-            <Assurance icon={<TrophyIcon className="size-5" />} title="30-day guarantee" text="Full refund if it's not for you." />
+            <Assurance icon={<TrophyIcon className="size-5" />} title={`${guaranteeDays}-day guarantee`} text="Full refund if it's not for you." />
           </div>
         </div>
         <FaqAccordion items={faqs} />
@@ -173,7 +198,7 @@ export default function PricingPage() {
   );
 }
 
-function PlanCard({ plan }: { plan: Plan }) {
+function PlanCard({ plan, currency }: { plan: Plan; currency: string }) {
   const featured = plan.featured;
   return (
     <article
@@ -191,8 +216,12 @@ function PlanCard({ plan }: { plan: Plan }) {
       <h3 className={`text-xl font-semibold ${featured ? "text-white" : "text-foreground"}`}>{plan.name}</h3>
       <p className={`mt-2 text-[0.9375rem] ${featured ? "text-white/80" : "text-muted-foreground"}`}>{plan.tagline}</p>
 
-      <p className="mt-6 flex items-baseline gap-2">
-        <span className={`text-5xl font-bold tracking-tight ${featured ? "text-white" : "text-foreground"}`}>{price(plan.price)}</span>
+      <p className="mt-6 flex flex-wrap items-baseline gap-x-2 gap-y-1">
+        {/* The symbol smaller than the amount, so "KSh 10,000" fits the card the way "$79" did. */}
+        <span className={`text-5xl font-bold tracking-tight tabular-nums ${featured ? "text-white" : "text-foreground"}`}>
+          <span className="mr-1 align-[0.55em] text-xl font-semibold tracking-normal">{currencySymbol(currency)}</span>
+          {plan.price.toLocaleString("en-US", { maximumFractionDigits: 2 })}
+        </span>
         <span className={`text-sm ${featured ? "text-white/75" : "text-muted-foreground"}`}>
           {plan.price === 0 ? "forever" : "one-time"}
         </span>

@@ -1,21 +1,21 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { CoursePlayer, type PlayerCourse } from "@/components/course-player";
-import { courses, getCourse } from "@/lib/content";
 import { findTopic, formatDuration, isoDuration } from "@/lib/course-taxonomy";
-import { getCurriculum, youtubeId } from "@/lib/curriculum";
+import { getCourseDetail, getPublishedCourses } from "@/lib/db/courses";
+import { getCourseReviews } from "@/lib/db/reviews";
+import { getSiteSettings } from "@/lib/db/settings";
 import { siteName, siteUrl } from "@/lib/site";
 
-// Every course is known at build time; any other slug is a 404.
-export const dynamicParams = false;
-
-export function generateStaticParams() {
-  return courses.map((course) => ({ slug: course.slug }));
+// Published courses are built ahead of time; courses published later render on first visit.
+export async function generateStaticParams() {
+  return (await getPublishedCourses()).map((course) => ({ slug: course.slug }));
 }
 
 export async function generateMetadata({ params }: PageProps<"/courses/[slug]">): Promise<Metadata> {
-  const course = getCourse((await params).slug);
-  if (!course) return {};
+  const detail = await getCourseDetail((await params).slug);
+  if (!detail) return {};
+  const { course } = detail;
   return {
     title: course.title,
     description: course.summary,
@@ -34,10 +34,11 @@ export async function generateMetadata({ params }: PageProps<"/courses/[slug]">)
 }
 
 export default async function CoursePlayerPage({ params, searchParams }: PageProps<"/courses/[slug]">) {
-  const course = getCourse((await params).slug);
-  if (!course) notFound();
+  const detail = await getCourseDetail((await params).slug);
+  if (!detail || !detail.sections.length) notFound();
 
-  const sections = getCurriculum(course);
+  const { course, sections } = detail;
+  const [reviews, settings] = await Promise.all([getCourseReviews(course.id), getSiteSettings()]);
   const lessons = sections.flatMap((s) => s.lessons);
   const requested = (await searchParams).lesson;
   const initialLesson = lessons.find((l) => l.slug === requested)?.slug ?? lessons[0].slug;
@@ -46,6 +47,9 @@ export default async function CoursePlayerPage({ params, searchParams }: PagePro
     slug: course.slug,
     title: course.title,
     summary: course.summary,
+    image: course.image,
+    access: course.access,
+    accessName: settings.plans.find((p) => p.slug === course.access)?.name ?? course.access,
     level: course.level,
     durationLabel: formatDuration(course.durationMinutes),
     students: course.students,
@@ -73,28 +77,28 @@ export default async function CoursePlayerPage({ params, searchParams }: PagePro
     educationalLevel: course.level,
     about: topic?.topic.name,
     provider: { "@type": "Organization", name: siteName, sameAs: siteUrl },
-    aggregateRating: { "@type": "AggregateRating", ratingValue: course.rating, reviewCount: course.reviews, bestRating: 5 },
+    ...(course.reviews > 0 && {
+      aggregateRating: { "@type": "AggregateRating", ratingValue: course.rating, reviewCount: course.reviews, bestRating: 5 },
+    }),
     hasCourseInstance: {
       "@type": "CourseInstance",
       courseMode: "Online",
       courseWorkload: isoDuration(course.durationMinutes),
       instructor: { "@type": "Person", name: course.instructor.name },
     },
-    hasPart: lessons.map((lesson) => ({
-      "@type": "VideoObject",
-      name: lesson.title,
-      description: lesson.summary,
-      thumbnailUrl: `https://i.ytimg.com/vi/${youtubeId(lesson.youtube)}/hqdefault.jpg`,
-      embedUrl: `https://www.youtube-nocookie.com/embed/${youtubeId(lesson.youtube)}`,
-      duration: `PT${lesson.durationSeconds}S`,
-      uploadDate: course.publishedAt,
+    // Lesson videos are for members, so the outline is listed without them.
+    syllabusSections: sections.map((section) => ({
+      "@type": "Syllabus",
+      name: section.title,
+      timeRequired: `PT${section.lessons.reduce((sum, l) => sum + l.durationSeconds, 0)}S`,
     })),
+    isAccessibleForFree: course.access === "warm-up",
   };
 
   return (
     <main className="flex-1">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, "\\u003c") }} />
-      <CoursePlayer course={playerCourse} sections={sections} initialLesson={initialLesson} />
+      <CoursePlayer course={playerCourse} sections={sections} initialLesson={initialLesson} reviews={reviews} />
     </main>
   );
 }

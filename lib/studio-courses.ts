@@ -1,12 +1,11 @@
-import type { Course } from "./content";
 import type { CategorySlug, Level, SubcategorySlug } from "./course-taxonomy";
-import { youtubeId, type CurriculumSection } from "./curriculum";
+import { youtubeId } from "./curriculum";
 import type { Plan } from "./plans";
 
 /*
- * The course model the instructor studio edits. It's a superset of what the
- * public site shows (Course + curriculum), shaped like a database record so a
- * backend can store it as-is.
+ * The course model the studio edits: a superset of what the public site shows
+ * (Course + curriculum). Loaded from and saved to the database by
+ * lib/db/studio/courses.ts and app/(studio)/studio/courses/actions.ts.
  */
 
 export type StudioStatus = "draft" | "review" | "published";
@@ -16,6 +15,8 @@ export type StudioResource = { id: string; label: string; url: string };
 
 export type StudioLesson = {
   id: string;
+  /** URL slug (?lesson=); set by the server on first save and kept after that */
+  slug?: string;
   title: string;
   youtube: string;
   durationSeconds: number;
@@ -23,6 +24,8 @@ export type StudioLesson = {
   /** Watchable without buying, like Udemy's "free preview" */
   preview: boolean;
   resources: StudioResource[];
+  /** Channel credit for videos you didn't make */
+  source?: string;
 };
 
 export type StudioSection = { id: string; title: string; lessons: StudioLesson[] };
@@ -46,6 +49,8 @@ export type StudioCourse = {
   sections: StudioSection[];
   drip: boolean;
   status: StudioStatus;
+  instructorId: string | null;
+  /** For display; change the instructor with instructorId */
   instructor: { name: string; email: string; image: string };
   students: number;
   rating: number;
@@ -89,7 +94,7 @@ export const totalSeconds = (course: StudioCourse) => lessonsOf(course).reduce((
 export const wordCount = (text: string) => text.trim().split(/\s+/).filter(Boolean).length;
 
 /** Blank draft for the Create Course form. */
-export function newCourse(input: Partial<StudioCourse>, instructor: StudioCourse["instructor"]): StudioCourse {
+export function newCourse(input: Partial<StudioCourse>, instructor: InstructorOption | null): StudioCourse {
   const title = input.title?.trim() ?? "";
   return {
     id: uid(),
@@ -110,7 +115,8 @@ export function newCourse(input: Partial<StudioCourse>, instructor: StudioCourse
     sections: [{ id: uid(), title: "Introduction", lessons: [] }],
     drip: false,
     status: "draft",
-    instructor,
+    instructorId: instructor?.id ?? null,
+    instructor: instructor ? { name: instructor.name, email: instructor.email, image: instructor.image } : { name: "Ultimate Deejays", email: "", image: "" },
     students: 0,
     rating: 0,
     updatedAt: new Date().toISOString(),
@@ -147,52 +153,5 @@ export function checklist(course: StudioCourse): CheckItem[] {
   ];
 }
 
-/* -------------------------------------------------------------------- seeds */
-
-const levelAudience: Record<Level, string> = {
-  Beginner: "Complete beginners who want to learn to DJ properly from day one",
-  Intermediate: "DJs who can beatmatch and want to sound more polished",
-  Advanced: "Experienced DJs preparing for bigger stages",
-  "All Levels": "DJs of every level who want to improve their sets",
-};
-
-/** Turns a published catalogue course and its curriculum into an editable studio record. */
-export function toStudioCourse(course: Course, sections: CurriculumSection[], email: string): StudioCourse {
-  const lessons = sections.flatMap((s) => s.lessons);
-  return {
-    id: course.slug,
-    slug: course.slug,
-    title: course.title,
-    subtitle: course.summary,
-    description: `${course.summary}\n\nEvery lesson is taught by ${course.instructor.name}, a working DJ, with drills you can practice on any setup. Work through each section at your own pace, record your progress and share your mixes for feedback from our instructors.`,
-    category: course.category,
-    subcategory: course.subcategory ?? "",
-    level: course.level,
-    language: "English",
-    access: course.slug === "dj-fundamentals" ? "warm-up" : course.level === "Advanced" ? "headliner" : "resident",
-    thumbnail: course.image,
-    promoVideo: lessons[0]?.youtube ?? "",
-    outcomes: lessons.slice(0, 5).map((l) => l.title),
-    requirements: ["A laptop and headphones", "Any DJ controller or free DJ software to practice with"],
-    audience: [levelAudience[course.level]],
-    sections: sections.map((section) => ({
-      id: `${course.slug}-${slugify(section.title)}`,
-      title: section.title,
-      lessons: section.lessons.map((lesson, i) => ({
-        id: `${course.slug}-${lesson.slug}`,
-        title: lesson.title,
-        youtube: lesson.youtube,
-        durationSeconds: lesson.durationSeconds,
-        summary: lesson.summary,
-        preview: i === 0,
-        resources: [],
-      })),
-    })),
-    drip: false,
-    status: "published",
-    instructor: { name: course.instructor.name, email, image: course.instructor.image },
-    students: course.students,
-    rating: course.rating,
-    updatedAt: `${course.publishedAt}T09:00:00.000Z`,
-  };
-}
+/** An instructor to pick in the course editor (and blog author picker). */
+export type InstructorOption = { id: string; name: string; email: string; image: string; specialty: string };

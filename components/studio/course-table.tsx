@@ -7,7 +7,8 @@ import { findTopic, formatDuration } from "@/lib/course-taxonomy";
 import { plans } from "@/lib/plans";
 import { matchesQuery } from "@/lib/search";
 import { lessonsOf, totalSeconds, uid, type StudioCourse, type StudioStatus } from "@/lib/studio-courses";
-import { useStudioCourses } from "@/lib/studio-store";
+import { deleteCourse, saveCourse } from "@/app/(studio)/studio/courses/actions";
+import { useServerCollection } from "@/lib/studio-store";
 import {
   ArrowUpRightIcon,
   ChevronDownIcon,
@@ -31,7 +32,7 @@ const dateFormat = new Intl.DateTimeFormat("en-US", { month: "short", day: "nume
 const planName = (slug: string) => plans.find((p) => p.slug === slug)?.name ?? slug;
 
 export function CourseTable({ seed }: { seed: StudioCourse[] }) {
-  const { courses, save, remove } = useStudioCourses(seed);
+  const { items: courses, save, remove } = useServerCollection(seed, { save: saveCourse, remove: deleteCourse });
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<StudioStatus | "all">("all");
   const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 }>({ key: "updated", dir: -1 });
@@ -86,8 +87,7 @@ export function CourseTable({ seed }: { seed: StudioCourse[] }) {
       students: 0,
       rating: 0,
     };
-    save(copy);
-    flash(`Duplicated as a draft: ${copy.title}`);
+    save(copy).then((saved) => saved && flash(`Duplicated as a draft: ${copy.title}`));
   }
 
   const tabs: { key: StudioStatus | "all"; label: string }[] = [
@@ -169,7 +169,7 @@ export function CourseTable({ seed }: { seed: StudioCourse[] }) {
       </div>
 
       {rows.length ? (
-        <div className="relative overflow-x-auto" data-lenis-prevent-horizontal>
+        <div className="relative overflow-x-auto">
           <table className="w-full min-w-[60rem] text-sm">
             <thead>
               <tr className="border-b border-border bg-muted/50 text-left text-xs text-muted-foreground">
@@ -277,9 +277,9 @@ export function CourseTable({ seed }: { seed: StudioCourse[] }) {
           course={confirmDelete}
           onCancel={() => setConfirmDelete(null)}
           onConfirm={() => {
-            remove(confirmDelete.id);
-            flash(`Deleted: ${confirmDelete.title}`);
+            const course = confirmDelete;
             setConfirmDelete(null);
+            remove(course.id).then((done) => done && flash(`Deleted: ${course.title}`));
           }}
         />
       )}

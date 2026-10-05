@@ -3,8 +3,10 @@
 import Link from "next/link";
 import { useState, type ComponentType, type ReactNode, type SVGProps } from "react";
 import { postCategories } from "@/lib/post-categories";
-import { defaultSettings, settingsSeed, type PlanSettings, type SiteSettings } from "@/lib/site-settings";
-import { useCollection } from "@/lib/studio-store";
+import { saveSettings } from "@/app/(studio)/studio/settings/actions";
+import { CURRENCIES, currencySymbol, formatMoney } from "@/lib/money";
+import { defaultSettings, type PlanSettings, type SiteSettings } from "@/lib/site-settings";
+import { runAction } from "@/lib/studio-store";
 import {
   ArrowUpRightIcon,
   BellIcon,
@@ -68,7 +70,8 @@ function validate(s: SiteSettings) {
   });
   if (!s.pricing.heading.trim()) e["pricing.heading"] = "Add a headline";
   if (s.affiliates.defaultCommission < 1 || s.affiliates.defaultCommission > 90) e["affiliates.defaultCommission"] = "Use a value from 1% to 90%";
-  if (s.affiliates.cookieDays < 1 || s.affiliates.cookieDays > 365) e["affiliates.cookieDays"] = "Use 1 to 365 days";
+  if (s.affiliates.cookieDays < 1 || s.affiliates.cookieDays > 90) e["affiliates.cookieDays"] = "Use 1 to 90 days";
+  if (s.affiliates.customerDiscount < 0 || s.affiliates.customerDiscount > 90) e["affiliates.customerDiscount"] = "Use a value from 0% to 90%";
   if (!s.payments.card && !s.payments.paypal) e["payments.methods"] = "Keep at least one way to pay";
   if (!emailOk(s.notifications.email)) e["notifications.email"] = "Enter a valid email address";
   return e;
@@ -76,9 +79,8 @@ function validate(s: SiteSettings) {
 
 const sectionOf = (key: string): SectionKey => (key.startsWith("plan.") ? "pricing" : (key.split(".")[0] as SectionKey));
 
-export function SettingsManager({ initialSection, posts }: { initialSection: SectionKey; posts: { slug: string; title: string }[] }) {
-  const { items, save } = useCollection("settings", settingsSeed);
-  const saved = withDefaults(items[0]);
+export function SettingsManager({ settings, initialSection, posts }: { settings: SiteSettings; initialSection: SectionKey; posts: { slug: string; title: string }[] }) {
+  const saved = withDefaults(settings);
   const savedJson = JSON.stringify(saved);
   const [seen, setSeen] = useState(savedJson);
   const [draft, setDraft] = useState<SiteSettings>(saved);
@@ -118,19 +120,21 @@ export function SettingsManager({ initialSection, posts }: { initialSection: Sec
       show(`Fix ${errorCount} ${errorCount === 1 ? "field" : "fields"} before saving`);
       return;
     }
-    save({ ...draft, updatedAt: new Date().toISOString() });
     setShowErrors(false);
-    show("Settings saved");
+    runAction(() => saveSettings(draft)).then((result) => result.ok && show("Settings saved"));
   }
 
   const sectionErrors = (key: SectionKey) => showErrors && Object.keys(errors).some((k) => sectionOf(k) === key);
   const current = sections.find((s) => s.key === section)!;
-  const money = (n: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: draft.general.currency, maximumFractionDigits: n % 1 ? 2 : 0 }).format(n);
+  const money = (n: number) => formatMoney(n, draft.general.currency);
+  // "KSh" needs more room in front of the number than "$".
+  const symbol = currencySymbol(draft.general.currency);
+  const symbolPad = symbol.length > 1 ? "pl-12" : "pl-8";
 
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-[15rem_minmax(0,1fr)] lg:gap-8">
       <nav aria-label="Settings sections" className="min-w-0 lg:sticky lg:top-24 lg:self-start">
-        <ul className="no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4 sm:mx-0 sm:px-0 lg:flex-col lg:gap-1" data-lenis-prevent-horizontal>
+        <ul className="no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4 sm:mx-0 sm:px-0 lg:flex-col lg:gap-1">
           {sections.map((s) => {
             const active = s.key === section;
             return (
@@ -169,18 +173,11 @@ export function SettingsManager({ initialSection, posts }: { initialSection: Sec
                 <Field label="Site name" htmlFor="site-name" required error={err("general.siteName")}>
                   <Input id="site-name" value={draft.general.siteName} onChange={(e) => patch("general", { siteName: e.target.value })} aria-invalid={!!err("general.siteName")} />
                 </Field>
-                <Field label="Currency" htmlFor="site-currency" hint="Used for prices across the site.">
+                <Field label="Currency" htmlFor="site-currency" hint="Prices, checkout and payouts. Use the currency your Paystack account charges in.">
                   <Select id="site-currency" value={draft.general.currency} onChange={(e) => patch("general", { currency: e.target.value as SiteSettings["general"]["currency"] })}>
-                    {[
-                      ["USD", "US dollar ($)"],
-                      ["EUR", "Euro (€)"],
-                      ["GBP", "British pound (£)"],
-                      ["KES", "Kenyan shilling (KSh)"],
-                      ["NGN", "Nigerian naira (₦)"],
-                      ["ZAR", "South African rand (R)"],
-                    ].map(([code, label]) => (
-                      <option key={code} value={code}>
-                        {label}
+                    {CURRENCIES.map((c) => (
+                      <option key={c.code} value={c.code}>
+                        {c.name} ({c.symbol})
                       </option>
                     ))}
                   </Select>
@@ -193,19 +190,27 @@ export function SettingsManager({ initialSection, posts }: { initialSection: Sec
               </div>
             </Panel>
 
-            <Panel title="Contact" description="How students reach you. Shown on the contact page and in the footer.">
+            <Panel title="Contact" description="How students reach you. Shown in the footer. The phone number is also your WhatsApp number.">
               <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
                 <Field label="Support email" htmlFor="site-email" required error={err("general.supportEmail")}>
                   <Input id="site-email" type="email" value={draft.general.supportEmail} onChange={(e) => patch("general", { supportEmail: e.target.value })} aria-invalid={!!err("general.supportEmail")} />
                 </Field>
-                <Field label="Phone" htmlFor="site-phone">
+                <Field label="Phone and WhatsApp" htmlFor="site-phone" hint="Opens WhatsApp chat when tapped. Kenyan numbers can start with 0.">
                   <Input id="site-phone" type="tel" value={draft.general.phone} onChange={(e) => patch("general", { phone: e.target.value })} />
                 </Field>
                 <div className="sm:col-span-2">
-                  <Field label="Studio address" htmlFor="site-address">
+                  <Field label="Location" htmlFor="site-address">
                     <Input id="site-address" value={draft.general.address} onChange={(e) => patch("general", { address: e.target.value })} />
                   </Field>
                 </div>
+              </div>
+            </Panel>
+
+            <Panel title="Student count" description="The number on the home page, About page and sign-up page, like “90+ students”. Everything else on those pages, like courses and free lessons, counts itself.">
+              <div className="max-w-xs">
+                <Field label="Students" htmlFor="site-students" hint="Update it as you grow. Keep it honest: people notice." error={err("general.studentCount")}>
+                  <Input id="site-students" type="number" min={0} step={1} value={draft.general.studentCount} onChange={(e) => patch("general", { studentCount: Math.max(0, Math.round(Number(e.target.value) || 0)) })} aria-invalid={!!err("general.studentCount")} />
+                </Field>
               </div>
             </Panel>
 
@@ -290,8 +295,8 @@ export function SettingsManager({ initialSection, posts }: { initialSection: Sec
                         <Input id={`plan-${p.slug}-name`} maxLength={24} value={p.name} onChange={(e) => patchPlan(p.slug, { name: e.target.value })} aria-invalid={!!err(`plan.${p.slug}.name`)} />
                       </Field>
                       <Field label="Price" htmlFor={`plan-${p.slug}-price`} hint="0 = free" error={err(`plan.${p.slug}.price`)}>
-                        <Affix prefix={<span className="text-sm">{money(0).replace(/[\d.,\s]/g, "")}</span>}>
-                          <Input id={`plan-${p.slug}-price`} type="number" min={0} step="1" value={p.price} onChange={(e) => patchPlan(p.slug, { price: e.target.value === "" ? 0 : Number(e.target.value) })} className="pl-10" />
+                        <Affix prefix={<span className="text-sm">{symbol}</span>}>
+                          <Input id={`plan-${p.slug}-price`} type="number" min={0} step="1" value={p.price} onChange={(e) => patchPlan(p.slug, { price: e.target.value === "" ? 0 : Number(e.target.value) })} className={symbolPad} />
                         </Affix>
                       </Field>
                     </div>
@@ -452,8 +457,8 @@ export function SettingsManager({ initialSection, posts }: { initialSection: Sec
                   </Select>
                 </Field>
                 <Field label="Minimum payout" htmlFor="pay-minimum" hint="Smaller balances roll over to the next payout.">
-                  <Affix prefix={<span className="text-sm">$</span>}>
-                    <Input id="pay-minimum" type="number" min={0} value={draft.payments.minimum} onChange={(e) => patch("payments", { minimum: Number(e.target.value) })} className="pl-8" />
+                  <Affix prefix={<span className="text-sm">{symbol}</span>}>
+                    <Input id="pay-minimum" type="number" min={0} value={draft.payments.minimum} onChange={(e) => patch("payments", { minimum: Number(e.target.value) })} className={symbolPad} />
                   </Affix>
                 </Field>
                 <div className="sm:col-span-2">
@@ -484,27 +489,40 @@ export function SettingsManager({ initialSection, posts }: { initialSection: Sec
                 <Switch id="aff-enabled" label="Accept new affiliates" hint="Shows the “Become an affiliate” form on the site." checked={draft.affiliates.enabled} onChange={(on) => patch("affiliates", { enabled: on })} />
                 <Switch id="aff-auto" label="Approve applications automatically" hint="Off: you review every application first." checked={draft.affiliates.autoApprove} onChange={(on) => patch("affiliates", { autoApprove: on })} />
               </div>
-              <div className="mt-6 grid grid-cols-1 gap-5 border-t border-border pt-5 sm:grid-cols-3">
+              <div className="mt-6 grid grid-cols-1 gap-5 border-t border-border pt-5 sm:grid-cols-2 lg:grid-cols-4">
                 <Field label="Default commission" htmlFor="aff-commission" hint="You can change it per affiliate." error={err("affiliates.defaultCommission")}>
                   <Affix suffix="%">
                     <Input id="aff-commission" type="number" min={1} max={90} value={draft.affiliates.defaultCommission} onChange={(e) => patch("affiliates", { defaultCommission: Number(e.target.value) })} className="pr-9" aria-invalid={!!err("affiliates.defaultCommission")} />
                   </Affix>
                 </Field>
-                <Field label="Referral cookie" htmlFor="aff-cookie" hint="How long a click counts." error={err("affiliates.cookieDays")}>
+                <Field label="Buyer discount" htmlFor="aff-discount" hint="Off for buyers using an affiliate's code or link. 0 = none." error={err("affiliates.customerDiscount")}>
+                  <Affix suffix="%">
+                    <Input id="aff-discount" type="number" min={0} max={90} value={draft.affiliates.customerDiscount} onChange={(e) => patch("affiliates", { customerDiscount: Number(e.target.value) })} className="pr-9" aria-invalid={!!err("affiliates.customerDiscount")} />
+                  </Affix>
+                </Field>
+                <Field label="Referral cookie" htmlFor="aff-cookie" hint="How long a click counts (up to 90)." error={err("affiliates.cookieDays")}>
                   <Affix suffix="days">
-                    <Input id="aff-cookie" type="number" min={1} max={365} value={draft.affiliates.cookieDays} onChange={(e) => patch("affiliates", { cookieDays: Number(e.target.value) })} className="pr-14" aria-invalid={!!err("affiliates.cookieDays")} />
+                    <Input id="aff-cookie" type="number" min={1} max={90} value={draft.affiliates.cookieDays} onChange={(e) => patch("affiliates", { cookieDays: Number(e.target.value) })} className="pr-14" aria-invalid={!!err("affiliates.cookieDays")} />
                   </Affix>
                 </Field>
                 <Field label="Minimum payout" htmlFor="aff-min" hint="Smaller balances roll over.">
-                  <Affix prefix={<span className="text-sm">$</span>}>
-                    <Input id="aff-min" type="number" min={0} value={draft.affiliates.minPayout} onChange={(e) => patch("affiliates", { minPayout: Number(e.target.value) })} className="pl-8" />
+                  <Affix prefix={<span className="text-sm">{symbol}</span>}>
+                    <Input id="aff-min" type="number" min={0} value={draft.affiliates.minPayout} onChange={(e) => patch("affiliates", { minPayout: Number(e.target.value) })} className={symbolPad} />
                   </Affix>
                 </Field>
               </div>
               <p className="mt-5 rounded-xl bg-brand/[0.07] px-4 py-3 text-sm text-foreground">
-                At {draft.affiliates.defaultCommission || 0}%, an affiliate earns{" "}
-                <span className="font-semibold">{money(((draft.plans.find((p) => p.featured) ?? draft.plans[1]).price * (draft.affiliates.defaultCommission || 0)) / 100)}</span> for every{" "}
-                {(draft.plans.find((p) => p.featured) ?? draft.plans[1]).name} plan they refer.
+                {(() => {
+                  const plan = draft.plans.find((p) => p.featured) ?? draft.plans[1];
+                  const paid = plan.price * (1 - (draft.affiliates.customerDiscount || 0) / 100);
+                  return (
+                    <>
+                      With their code, a buyer pays <span className="font-semibold">{money(paid)}</span> for {plan.name} and the affiliate earns{" "}
+                      <span className="font-semibold">{money((paid * (draft.affiliates.defaultCommission || 0)) / 100)}</span> at{" "}
+                      {draft.affiliates.defaultCommission || 0}%.
+                    </>
+                  );
+                })()}
               </p>
             </Panel>
 

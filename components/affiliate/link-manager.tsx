@@ -4,13 +4,14 @@ import Link from "next/link";
 import { useId, useState } from "react";
 import { prettyUrl, referralUrl, toSub } from "@/lib/affiliate-links";
 import type { TrackedLink } from "@/lib/affiliate-portal";
-import { useCollection } from "@/lib/studio-store";
+import { deleteAffiliateLink, saveAffiliateLink } from "@/app/(affiliate)/affiliate/actions";
+import { useServerCollection } from "@/lib/studio-store";
 import { ArrowUpRightIcon, CheckIcon, LinkIcon, PlusIcon, TagIcon, TrashIcon } from "../icons";
 import { ConfirmDialog, ManageTable, RowMenu, useToast } from "../studio/manage-table";
 import { Field, Input, Panel, Select, primaryButton } from "../studio/ui";
 import { CopyButton } from "./copy-button";
+import { useMoney } from "../money-context";
 
-const usd = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
 const date = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
 
 export function LinkManager({
@@ -18,16 +19,20 @@ export function LinkManager({
   seed,
   destinations,
   cookieDays,
+  customerDiscount,
   today,
 }: {
   code: string;
   seed: TrackedLink[];
   destinations: { path: string; label: string }[];
   cookieDays: number;
+  /** % off buyers get with this code or a link */
+  customerDiscount: number;
   today: string;
 }) {
+  const { exact: money } = useMoney();
   const id = useId();
-  const { items, save, remove } = useCollection("affiliate-links", seed);
+  const { items, save, remove } = useServerCollection(seed, { save: saveAffiliateLink, remove: deleteAffiliateLink });
   const [path, setPath] = useState(destinations[0].path);
   const [label, setLabel] = useState("");
   const [deleting, setDeleting] = useState<TrackedLink | null>(null);
@@ -42,10 +47,11 @@ export function LinkManager({
 
   function create() {
     if (!sub || taken) return;
-    save({ id: `${newId}-${created}`, label: label.trim(), path, sub, createdAt: today, clicks: 0, sales: 0, earned: 0, updatedAt: new Date().toISOString() });
     setCreated((n) => n + 1);
     setLabel("");
-    show("Link saved. Copy it from the list below.");
+    save({ id: `${newId}-${created}`, label: label.trim(), path, sub, createdAt: today, clicks: 0, sales: 0, earned: 0, updatedAt: new Date().toISOString() }).then(
+      (saved) => saved && show("Link saved. Copy it from the list below."),
+    );
   }
 
   return (
@@ -102,7 +108,10 @@ export function LinkManager({
               <p className="min-w-0 flex-1 font-mono text-2xl font-bold tracking-wide text-foreground">{code}</p>
               <CopyButton text={code} />
             </div>
-            <p className="mt-3 text-sm text-muted-foreground">Students can type this at checkout if they didn&apos;t use your link. Great for videos, podcasts and live sets.</p>
+            <p className="mt-3 text-sm text-muted-foreground">
+              {customerDiscount ? `Buyers who type it at checkout get ${customerDiscount}% off, and the sale is yours.` : "Buyers can type it at checkout, and the sale is yours."} Great for
+              videos, podcasts and live sets.
+            </p>
             <Link href="/affiliate/settings#code" className="mt-3 inline-flex items-center gap-1 text-sm font-medium text-brand hover:underline">
               Request a different code <ArrowUpRightIcon className="size-3.5" />
             </Link>
@@ -115,6 +124,7 @@ export function LinkManager({
                 "If they buy any paid plan in that time, the sale is yours.",
                 "The last affiliate link they clicked gets the credit.",
                 "Your code at checkout counts even without a click.",
+                ...(customerDiscount ? [`Your links and code both give buyers ${customerDiscount}% off, applied for them.`] : []),
               ].map((t) => (
                 <li key={t} className="flex gap-2.5">
                   <CheckIcon className="mt-0.5 size-4 shrink-0 text-brand" />
@@ -156,7 +166,7 @@ export function LinkManager({
             sort: (l) => (l.clicks ? l.sales / l.clicks : 0),
             render: (l) => <span className="text-muted-foreground tabular-nums">{l.clicks ? `${((l.sales / l.clicks) * 100).toFixed(1)}%` : "—"}</span>,
           },
-          { key: "earned", header: "Earned", align: "right", sort: (l) => l.earned, render: (l) => <span className="font-semibold text-foreground tabular-nums">{usd.format(l.earned)}</span> },
+          { key: "earned", header: "Earned", align: "right", sort: (l) => l.earned, render: (l) => <span className="font-semibold text-foreground tabular-nums">{money(l.earned)}</span> },
           { key: "created", header: "Created", sort: (l) => l.createdAt, render: (l) => <span className="whitespace-nowrap text-muted-foreground">{date.format(new Date(l.createdAt))}</span> },
           { key: "copy", header: "", render: (l) => <CopyButton text={referralUrl(code, l.path, l.sub)} iconOnly label={`Copy ${l.label} link`} className="size-9 px-0" /> },
         ]}
@@ -179,9 +189,9 @@ export function LinkManager({
           confirmLabel="Delete link"
           onCancel={() => setDeleting(null)}
           onConfirm={() => {
-            remove(deleting.id);
+            const id = deleting.id;
             setDeleting(null);
-            show("Link deleted");
+            remove(id).then((ok) => ok && show("Link deleted"));
           }}
         />
       )}

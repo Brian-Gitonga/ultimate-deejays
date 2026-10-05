@@ -8,8 +8,8 @@ import { useToast } from "../studio/manage-table";
 import { StatusBadge } from "../studio/status";
 import { Field, Input, Panel, Select, primaryButton, secondaryButton } from "../studio/ui";
 import { useAffiliateAccount, useDraft } from "./use-account";
+import { useMoney } from "../money-context";
 
-const usd = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
 const date = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
 const longDate = new Intl.DateTimeFormat("en-US", { month: "long", day: "numeric", timeZone: "UTC" });
 const emailOk = (v: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
@@ -29,20 +29,21 @@ export function describeMethod(a: AffiliateAccount) {
 }
 
 export function PayoutsManager({
-  seed,
+  initial,
   payouts,
   balance,
   minPayout,
   today,
 }: {
-  seed: AffiliateAccount[];
+  initial: AffiliateAccount;
   payouts: AffiliatePayout[];
   balance: { pending: number; approved: number; paidOut: number; lifetime: number };
   minPayout: number;
   today: string;
 }) {
+  const { exact: money } = useMoney();
   const id = useId();
-  const { account, save } = useAffiliateAccount(seed);
+  const { account, save } = useAffiliateAccount(initial);
   const method = useDraft({ payoutMethod: account.payoutMethod, paypalEmail: account.paypalEmail, mpesaPhone: account.mpesaPhone, bank: account.bank });
   const tax = useDraft(account.tax);
   const [showErrors, setShowErrors] = useState(false);
@@ -67,9 +68,8 @@ export function PayoutsManager({
       setShowErrors(true);
       return;
     }
-    save({ ...account, ...m });
     setShowErrors(false);
-    show("Payout method saved");
+    save({ ...account, ...m }).then((saved) => saved && show("Payout method saved"));
   }
 
   return (
@@ -79,21 +79,21 @@ export function PayoutsManager({
           <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
             <CheckIcon className="size-4 text-brand" /> Cleared
           </p>
-          <p className="mt-2 text-[1.75rem] leading-none font-bold tracking-tight text-foreground tabular-nums">{usd.format(balance.approved)}</p>
+          <p className="mt-2 text-[1.75rem] leading-none font-bold tracking-tight text-foreground tabular-nums">{money(balance.approved)}</p>
           <p className="mt-2 text-xs text-muted-foreground">Ready for your next payout</p>
         </div>
         <div className="rounded-2xl border border-border bg-card p-5">
           <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
             <ClockIcon className="size-4 text-[#c98200] dark:text-[#ffb938]" /> Pending
           </p>
-          <p className="mt-2 text-[1.75rem] leading-none font-bold tracking-tight text-foreground tabular-nums">{usd.format(balance.pending)}</p>
+          <p className="mt-2 text-[1.75rem] leading-none font-bold tracking-tight text-foreground tabular-nums">{money(balance.pending)}</p>
           <p className="mt-2 text-xs text-muted-foreground">Clears once the refund window ends</p>
         </div>
         <div className="rounded-2xl bg-brand-deep p-5 text-white">
           <p className="text-sm text-white/75">Next payout · {longDate.format(new Date(payoutDay))}</p>
-          <p className="mt-2 text-[1.75rem] leading-none font-bold tracking-tight tabular-nums">{willPay ? usd.format(balance.approved) : usd.format(0)}</p>
+          <p className="mt-2 text-[1.75rem] leading-none font-bold tracking-tight tabular-nums">{willPay ? money(balance.approved) : money(0)}</p>
           <p className="mt-2 text-xs text-white/75">
-            {willPay ? `Sent to ${describeMethod(account)}` : `Cleared balance is under the ${usd.format(minPayout)} minimum, so it rolls over to next month.`}
+            {willPay ? `Sent to ${describeMethod(account)}` : `Cleared balance is under the ${money(minPayout)} minimum, so it rolls over to next month.`}
           </p>
         </div>
       </div>
@@ -190,8 +190,7 @@ export function PayoutsManager({
               type="button"
               disabled={!tax.dirty}
               onClick={() => {
-                save({ ...account, tax: tax.draft });
-                show("Tax details saved");
+                save({ ...account, tax: tax.draft }).then((saved) => saved && show("Tax details saved"));
               }}
               className={`${secondaryButton} w-full`}
             >
@@ -201,9 +200,9 @@ export function PayoutsManager({
         </Panel>
       </div>
 
-      <Panel title="Payout history" description={`${usd.format(balance.paidOut)} paid to you so far. Payouts go out on the last day of each month.`}>
+      <Panel title="Payout history" description={`${money(balance.paidOut)} paid to you so far. Payouts go out on the last day of each month.`}>
         {payouts.length ? (
-          <div className="relative -mx-5 -my-5 overflow-x-auto sm:-mx-6 sm:-my-6" data-lenis-prevent-horizontal>
+          <div className="relative -mx-5 -my-5 overflow-x-auto sm:-mx-6 sm:-my-6">
             <table className="w-full min-w-[38rem] text-sm">
               <thead>
                 <tr className="border-b border-border text-left text-xs text-muted-foreground">
@@ -227,7 +226,7 @@ export function PayoutsManager({
                     <td className="px-3 py-3.5">
                       <StatusBadge status="published" label="Paid" />
                     </td>
-                    <td className="px-5 py-3.5 text-right font-semibold text-foreground tabular-nums sm:px-6">{usd.format(p.amount)}</td>
+                    <td className="px-5 py-3.5 text-right font-semibold text-foreground tabular-nums sm:px-6">{money(p.amount)}</td>
                   </tr>
                 ))}
               </tbody>

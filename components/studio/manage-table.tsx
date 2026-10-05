@@ -34,6 +34,7 @@ export function ManageTable<T>({
   toolbar,
   empty,
   minWidth = "56rem",
+  initialQuery = "",
 }: {
   title: string;
   items: T[];
@@ -48,8 +49,10 @@ export function ManageTable<T>({
   toolbar?: ReactNode;
   empty: ReactNode;
   minWidth?: string;
+  /** Pre-fills the search box (e.g. from ?q= in a notification link) */
+  initialQuery?: string;
 }) {
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(initialQuery);
   const [tab, setTab] = useState(tabs?.[0]?.key ?? "");
   const [sort, setSort] = useState(initialSort ?? null);
   const [pageSize, setPageSize] = useState(10);
@@ -83,7 +86,7 @@ export function ManageTable<T>({
         <div className="min-w-0">
           <h2 className="text-base font-semibold text-foreground">{title}</h2>
           {tabs && (
-            <div role="tablist" aria-label="Filter" className="no-scrollbar -mx-1 mt-3 flex gap-1 overflow-x-auto px-1" data-lenis-prevent-horizontal>
+            <div role="tablist" aria-label="Filter" className="no-scrollbar -mx-1 mt-3 flex gap-1 overflow-x-auto px-1">
               {tabs.map((t) => {
                 const count = items.filter(t.test).length;
                 return (
@@ -146,7 +149,7 @@ export function ManageTable<T>({
 
       {rows.length ? (
         // relative: keeps sr-only labels inside the scroller so they can't widen the page on phones
-        <div className="relative overflow-x-auto" data-lenis-prevent-horizontal>
+        <div className="relative overflow-x-auto">
           <table className="w-full text-sm" style={{ minWidth }}>
             <thead>
               <tr className="border-b border-border bg-muted/50 text-xs text-muted-foreground">

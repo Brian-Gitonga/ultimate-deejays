@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import { prettyUrl, referralUrl } from "@/lib/affiliate-links";
 import { DashboardShell, type NavGroup } from "../dashboard-shell";
 import { ArrowUpRightIcon, DashboardIcon, ImageIcon, LinkIcon, SettingsIcon, UsersIcon, WalletIcon } from "../icons";
+import { StudioNotices } from "../studio/studio-notices";
 import { CopyButton } from "./copy-button";
 
 const navGroups: NavGroup[] = [
@@ -34,6 +35,7 @@ export function AffiliateShell({ affiliate, children }: { affiliate: { name: str
       homeHref="/affiliate"
       navGroups={navGroups}
       notificationsHref="/affiliate/referrals"
+      notices={<StudioNotices />}
       user={{ name: affiliate.name, image: affiliate.avatar, role: "Affiliate", href: "/affiliate/settings" }}
       headerStart={
         <div className="hidden min-w-0 items-center gap-2 rounded-lg border border-border bg-muted/60 py-1 pr-1 pl-3 md:flex">

@@ -14,7 +14,7 @@ export function SectionHeading({
   const centered = align === "center";
 
   return (
-    <div className={`reveal ${centered ? "mx-auto max-w-[40rem] text-center" : "max-w-[35rem]"}`}>
+    <div className={centered ? "mx-auto max-w-[40rem] text-center" : "max-w-[35rem]"}>
       <p className="text-base font-medium text-brand sm:text-[1.0625rem]">{eyebrow}</p>
       <h2
         id={id}

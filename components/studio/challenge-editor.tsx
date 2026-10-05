@@ -4,13 +4,14 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
+import { saveChallenge } from "@/app/(studio)/studio/challenges/actions";
 import { inspectYouTube } from "@/app/(studio)/studio/courses/actions";
 import { challengeTypes, type Difficulty, type Inspiration, type Winner } from "@/lib/challenges";
 import { youtubeId } from "@/lib/curriculum";
-import { challengeProblems, challengeState, type StudioChallenge } from "@/lib/studio-challenges";
+import { challengeProblems, challengeState, type ChallengeEntry, type StudioChallenge } from "@/lib/studio-challenges";
 import { slugify, uid } from "@/lib/studio-courses";
-import { useCollection } from "@/lib/studio-store";
 import { ArrowUpRightIcon, CloseIcon, PlusIcon } from "../icons";
+import { ChallengeEntries } from "./challenge-entries";
 import { ChallengeStateBadge } from "./challenge-manager";
 import { ThumbnailPicker } from "./course-fields";
 import { ListEditor } from "./list-editor";
@@ -20,9 +21,17 @@ const iso = (d: Date) => d.toISOString().slice(0, 10);
 const inDays = (n: number) => iso(new Date(Date.now() + n * 86_400_000));
 const avatars = [1, 2, 3, 4, 5].map((n) => `/images/students/student-${n}.jpg`);
 
-export function ChallengeEditor({ seed, challengeId }: { seed: StudioChallenge[]; challengeId?: string }) {
-  const { items } = useCollection("challenges", seed);
-  const existing = challengeId ? items.find((c) => c.id === challengeId) : undefined;
+export function ChallengeEditor({
+  challenge,
+  missing = false,
+  entries,
+  takenSlugs,
+}: {
+  challenge: StudioChallenge | null;
+  missing?: boolean;
+  entries: ChallengeEntry[];
+  takenSlugs: string[];
+}) {
   const [fresh] = useState<StudioChallenge>(() => ({
     id: uid(),
     slug: "",
@@ -47,7 +56,7 @@ export function ChallengeEditor({ seed, challengeId }: { seed: StudioChallenge[]
     updatedAt: new Date().toISOString(),
   }));
 
-  if (challengeId && !existing) {
+  if (missing) {
     return (
       <Panel>
         <div className="py-10 text-center">
@@ -60,23 +69,23 @@ export function ChallengeEditor({ seed, challengeId }: { seed: StudioChallenge[]
     );
   }
 
-  const initial = existing ?? fresh;
-  return <Editor key={initial.id} seed={seed} initial={initial} isNew={!existing} />;
+  const initial = challenge ?? fresh;
+  return <Editor key={initial.id} initial={initial} isNew={!challenge} entries={entries} takenSlugs={takenSlugs} />;
 }
 
-function Editor({ seed, initial, isNew }: { seed: StudioChallenge[]; initial: StudioChallenge; isNew: boolean }) {
+function Editor({ initial, isNew, entries, takenSlugs }: { initial: StudioChallenge; isNew: boolean; entries: ChallengeEntry[]; takenSlugs: string[] }) {
   const router = useRouter();
   const saved = useSearchParams().get("saved");
-  const savedMessages: Record<string, string> = {"published":"Challenge published.","draft":"Saved as a draft."};
-  const { items, save } = useCollection("challenges", seed);
+  const savedMessages: Record<string, string> = { published: "Challenge published.", draft: "Saved as a draft." };
   const [draft, setDraft] = useState(initial);
   const [savedJson, setSavedJson] = useState(() => JSON.stringify(initial));
   const [showErrors, setShowErrors] = useState(false);
+  const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ tone: "ok" | "error"; text: string } | null>(saved && savedMessages[saved] ? { tone: "ok", text: savedMessages[saved] } : null);
 
   const dirty = JSON.stringify(draft) !== savedJson;
   const problems = challengeProblems(draft);
-  const slugTaken = items.some((c) => c.id !== draft.id && c.slug === (draft.slug || slugify(draft.title)));
+  const slugTaken = takenSlugs.includes(draft.slug || slugify(draft.title));
   if (slugTaken) problems.slug = "Another challenge already uses this URL.";
   const err = (key: string) => (showErrors ? problems[key] : undefined);
   const state = challengeState(draft);
@@ -90,7 +99,7 @@ function Editor({ seed, initial, isNew }: { seed: StudioChallenge[]; initial: St
     return () => window.removeEventListener("beforeunload", onLeave);
   }, [dirty]);
 
-  function submit(published: boolean) {
+  async function submit(published: boolean) {
     const next = { ...draft, published, slug: draft.slug || slugify(draft.title) };
     // Drafts only need a title; publishing needs everything.
     const blocking = published ? problems : Object.fromEntries(Object.entries(problems).filter(([k]) => k === "title" || k === "slug"));
@@ -100,15 +109,14 @@ function Editor({ seed, initial, isNew }: { seed: StudioChallenge[]; initial: St
       requestAnimationFrame(() => document.querySelector<HTMLElement>("[aria-invalid='true']")?.focus());
       return;
     }
-    try {
-      save(next);
-      setDraft(next);
-      setSavedJson(JSON.stringify(next));
-      setMessage({ tone: "ok", text: published ? `Published. It shows as “${challengeState(next)}” on the site.` : "Saved as a draft." });
-      if (isNew) router.replace(`/studio/challenges/${next.id}/edit?saved=${published ? "published" : "draft"}`);
-    } catch (e) {
-      setMessage({ tone: "error", text: (e as Error).message });
-    }
+    setBusy(true);
+    const result = await saveChallenge(next).catch(() => ({ ok: false as const, error: "We couldn't reach the server. Your changes are kept here; try again." }));
+    setBusy(false);
+    if (!result.ok) return setMessage({ tone: "error", text: result.error });
+    if (isNew) return router.replace(`/studio/challenges/${result.record.id}/edit?saved=${published ? "published" : "draft"}`);
+    setDraft(result.record);
+    setSavedJson(JSON.stringify(result.record));
+    setMessage({ tone: "ok", text: published ? `Published. It shows as "${challengeState(result.record)}" on the site.` : "Saved as a draft." });
   }
 
   return (
@@ -155,7 +163,7 @@ function Editor({ seed, initial, isNew }: { seed: StudioChallenge[]; initial: St
               </Field>
             </div>
             <Field label="Cover image" htmlFor="cover" required error={err("image")}>
-              <ThumbnailPicker id="cover" value={draft.image} onChange={(src) => set("image", src)} invalid={!!err("image")} />
+              <ThumbnailPicker id="cover" folder="challenges" value={draft.image} onChange={(src) => set("image", src)} invalid={!!err("image")} />
             </Field>
           </div>
         </Panel>
@@ -221,9 +229,25 @@ function Editor({ seed, initial, isNew }: { seed: StudioChallenge[]; initial: St
         </Panel>
 
         {state === "ended" && (
-          <Panel title="Winners" description="Shown on a podium on the challenge page.">
+          <Panel title="Winners" description="Shown on a podium on the challenge page. Save to publish them.">
             <WinnersEditor winners={draft.winners ?? []} onChange={(w) => set("winners", w)} />
           </Panel>
+        )}
+
+        {!isNew && (
+          <ChallengeEntries
+            entries={entries}
+            onPodium={
+              state === "ended"
+                ? (entry) =>
+                    setDraft((d) => {
+                      const winners = d.winners ?? [];
+                      if (winners.length >= 3 || winners.some((w) => w.name === entry.name)) return d;
+                      return { ...d, winners: [...winners, { place: (winners.length + 1) as 1 | 2 | 3, name: entry.name, avatar: avatars[winners.length], city: "" }] };
+                    })
+                : undefined
+            }
+          />
         )}
       </div>
 
@@ -256,10 +280,10 @@ function Editor({ seed, initial, isNew }: { seed: StudioChallenge[]; initial: St
               <span className="font-semibold text-foreground tabular-nums">{draft.entries}</span> entries so far
             </p>
             <div className="grid grid-cols-2 gap-2">
-              <button type="button" onClick={() => submit(false)} className={secondaryButton}>
+              <button type="button" disabled={busy} onClick={() => submit(false)} className={secondaryButton}>
                 {draft.published ? "Unpublish" : "Save draft"}
               </button>
-              <button type="button" onClick={() => submit(true)} className={primaryButton}>
+              <button type="button" disabled={busy} onClick={() => submit(true)} className={primaryButton}>
                 {draft.published ? "Update" : "Publish"}
               </button>
             </div>

@@ -8,18 +8,18 @@ import { ChallengeEntryForm } from "@/components/challenge-entry-form";
 import { Countdown } from "@/components/countdown";
 import { AwardIcon, CalendarIcon, CheckIcon, ChevronRightIcon, HomeIcon, TrophyIcon, UsersIcon } from "@/components/icons";
 import { YouTubePlayer } from "@/components/youtube-player";
-import { challengeTypes, challenges, getChallenge, type Challenge } from "@/lib/challenges";
+import { challengeTypes, type Challenge } from "@/lib/challenges";
 import { youtubeId } from "@/lib/curriculum";
+import { getPublicChallenge, getPublicChallenges } from "@/lib/db/challenges";
 import { siteName, siteUrl } from "@/lib/site";
 
-export const dynamicParams = false;
-
-export function generateStaticParams() {
-  return challenges.map((c) => ({ slug: c.slug }));
+// Published challenges are built ahead of time; new ones render on first visit.
+export async function generateStaticParams() {
+  return (await getPublicChallenges()).map((c) => ({ slug: c.slug }));
 }
 
 export async function generateMetadata({ params }: PageProps<"/challenges/[slug]">): Promise<Metadata> {
-  const challenge = getChallenge((await params).slug);
+  const challenge = await getPublicChallenge((await params).slug);
   if (!challenge) return {};
   const title = `${challenge.title}: DJ Challenge`;
   return {
@@ -33,8 +33,9 @@ export async function generateMetadata({ params }: PageProps<"/challenges/[slug]
 const longDate = new Intl.DateTimeFormat("en-US", { month: "long", day: "numeric", year: "numeric", timeZone: "UTC" });
 
 export default async function ChallengePage({ params }: PageProps<"/challenges/[slug]">) {
-  const challenge = getChallenge((await params).slug);
+  const challenge = await getPublicChallenge((await params).slug);
   if (!challenge) notFound();
+  const challenges = await getPublicChallenges();
 
   const status = statusStyles[challenge.status];
   const type = challengeTypes.find((t) => t.slug === challenge.type)?.name;

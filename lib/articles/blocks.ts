@@ -1,5 +1,6 @@
 /*
- * Article bodies are plain data, rendered by components/article-body.tsx.
+ * Article bodies as blocks, rendered by components/article-body.tsx. Posts are
+ * stored as Markdown (blog_posts.body) and turned into blocks by lib/markdown.ts.
  * Text supports two inline marks: **bold** and [link text](/path).
  */
 export type Block =
@@ -16,11 +17,3 @@ export type Article = {
   excerpt: string;
   body: Block[];
 };
-
-export const p = (text: string): Block => ({ type: "p", text });
-export const h2 = (text: string): Block => ({ type: "h2", text });
-export const h3 = (text: string): Block => ({ type: "h3", text });
-export const ul = (...items: string[]): Block => ({ type: "ul", items });
-export const ol = (...items: string[]): Block => ({ type: "ol", items });
-export const tip = (title: string, text: string): Block => ({ type: "tip", title, text });
-export const quote = (text: string, cite?: string): Block => ({ type: "quote", text, cite });

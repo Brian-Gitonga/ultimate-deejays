@@ -52,7 +52,7 @@ export function Faq() {
           <FaqVisual />
         </div>
 
-        <div className="reveal lg:pt-2">
+        <div className="lg:pt-2">
           <FaqAccordion items={faqs} />
         </div>
       </div>
@@ -62,7 +62,7 @@ export function Faq() {
 
 function FaqVisual() {
   return (
-    <div className="reveal relative mx-auto mt-10 aspect-square w-full max-w-[26.25rem] lg:mx-0 lg:ml-6">
+    <div className="relative mx-auto mt-10 aspect-square w-full max-w-[26.25rem] lg:mx-0 lg:ml-6">
       {/* Scalloped mint cloud behind the photo, echoing the reference illustration */}
       <svg viewBox="0 0 200 200" aria-hidden="true" className="absolute inset-0 size-full overflow-visible text-[#b6dcd4] dark:text-brand/25">
         <g fill="currentColor">

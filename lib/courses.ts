@@ -1,12 +1,13 @@
-import { courses, type Course } from "./content";
+import type { Course } from "./content";
 import { COURSES_PAGE_SIZE, type CourseFilters } from "./course-filters";
 import { courseCategories, courseDurations, courseLevels, findTopic, type CourseCategory } from "./course-taxonomy";
+import { getPublishedCourses } from "./db/courses";
 import { matchesQuery } from "./search";
 
 /*
- * Catalogue queries. This is the one place that knows where courses come from:
- * today it filters the in-memory list in lib/content; with a backend, swap the
- * body for a database or API call that returns the same shape.
+ * Catalogue queries over the published courses (lib/db/courses, cached).
+ * The catalogue is small, so filtering and facet counts happen here rather
+ * than in SQL; move them into the query if it grows into the thousands.
  */
 
 export type FacetCounts = Record<string, number>;
@@ -52,6 +53,7 @@ function countBy(pool: Course[], keys: string[], test: (c: Course, key: string) 
 }
 
 export async function queryCourses(filters: CourseFilters): Promise<CourseQueryResult> {
+  const courses = await getPublishedCourses();
   const searched = courses.filter((c) => matches.query(c, filters));
 
   // Each facet counts against every *other* active filter, so the numbers say what clicking would show.
@@ -83,6 +85,6 @@ export async function queryCourses(filters: CourseFilters): Promise<CourseQueryR
 }
 
 /** Course counts per top-level category, for the home page's category tiles. */
-export function countCoursesByCategory(): FacetCounts {
-  return countBy(courses, courseCategories.map((c) => c.slug), matches.category);
+export async function countCoursesByCategory(): Promise<FacetCounts> {
+  return countBy(await getPublishedCourses(), courseCategories.map((c) => c.slug), matches.category);
 }

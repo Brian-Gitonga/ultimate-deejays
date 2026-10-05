@@ -7,9 +7,10 @@ import { LatestPosts } from "@/components/latest-posts";
 import { Newsletter } from "@/components/newsletter";
 import { Stats } from "@/components/stats";
 import { TrustedBy } from "@/components/trusted-by";
-import { latestCourses, popularCourses } from "@/lib/content";
+import { getLatestCourses, getPopularCourses } from "@/lib/db/courses";
 
-export default function Home() {
+export default async function Home() {
+  const [popularCourses, latestCourses] = await Promise.all([getPopularCourses(), getLatestCourses()]);
   return (
     <main className="flex-1">
       {/* Pulled up under the sticky header so the glow shows through it at the top */}

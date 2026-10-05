@@ -36,6 +36,8 @@ export function DashboardShell({
   headerActions,
   sidebarFooter,
   notificationsHref,
+  notificationCount,
+  notices,
   children,
 }: {
   /** Used in labels: "Studio menu", "Studio home" */
@@ -47,6 +49,10 @@ export function DashboardShell({
   headerActions?: ReactNode;
   sidebarFooter?: ReactNode;
   notificationsHref: string;
+  /** Unread count on the bell; undefined shows a plain bell */
+  notificationCount?: number;
+  /** Rendered above the page content (e.g. the studio's error banner) */
+  notices?: ReactNode;
   children: ReactNode;
 }) {
   const pathname = usePathname();
@@ -72,20 +78,17 @@ export function DashboardShell({
     <div className="flex h-full flex-col">
       <div className={`flex h-16 shrink-0 items-center ${compact ? "justify-center" : "px-5"}`}>
         {compact ? (
-          <Link href={homeHref} aria-label={`${name} home`} className="text-brand">
-            <svg viewBox="0 0 32 32" className="size-8" aria-hidden="true">
-              <circle cx="16" cy="16" r="13.5" fill="none" stroke="currentColor" strokeWidth="3" />
-              <circle cx="16" cy="16" r="3.5" fill="currentColor" />
-            </svg>
+          <Link href={homeHref} aria-label={`${name} home`} className="text-[#037164] dark:text-brand">
+            <span aria-hidden="true" className="logo-mark-mask block size-9" />
           </Link>
         ) : (
           <div className="flex items-center gap-2">
-            <Logo />
+            <Logo size="xs" />
           </div>
         )}
       </div>
 
-      <nav aria-label={name} className="flex-1 overflow-y-auto px-3 pb-4" data-lenis-prevent>
+      <nav aria-label={name} className="flex-1 overflow-y-auto px-3 pb-4">
         {navGroups.map((group) => (
           <div key={group.title} className="mt-4 first:mt-2">
             {compact ? (
@@ -213,11 +216,15 @@ export function DashboardShell({
             <ThemeToggle />
             <Link
               href={notificationsHref}
-              aria-label="Notifications, 3 unread"
+              aria-label={notificationCount ? `Notifications, ${notificationCount} unread` : "Notifications"}
               className="relative flex size-10 items-center justify-center rounded-lg text-foreground hover:bg-foreground/5"
             >
               <BellIcon className="size-5" />
-              <span className="absolute top-2 right-2.5 size-2 rounded-full bg-accent-rose ring-2 ring-background" />
+              {!!notificationCount && (
+                <span className="absolute top-1 right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-accent-rose px-1 text-[0.625rem] font-bold text-white ring-2 ring-background">
+                  {notificationCount > 99 ? "99+" : notificationCount}
+                </span>
+              )}
             </Link>
             <Link href={user.href} className="ml-1 flex items-center gap-2.5 rounded-full py-1 pr-1 pl-1 hover:bg-foreground/5 sm:pr-3">
               <span className="relative">
@@ -236,6 +243,7 @@ export function DashboardShell({
           </div>
         </header>
 
+        {notices}
         {children}
       </div>
     </div>

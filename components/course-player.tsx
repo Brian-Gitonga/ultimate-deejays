@@ -3,8 +3,11 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useId, useState, type ReactNode } from "react";
-import { formatClock, youtubeId, type CurriculumSection, type Lesson } from "@/lib/curriculum";
-import { useCompletedLessons, useLessonNote } from "@/lib/learning-store";
+import { formatClock, type CurriculumSection, type Lesson, type LessonResource } from "@/lib/curriculum";
+import { openLesson, saveLessonProgress, syncCourseProgress, type LessonAccess } from "@/app/(learn)/courses/actions";
+import type { PublicReview } from "@/lib/db/reviews";
+import { mergeCompletedLessons, readCompletedLessons, useCompletedLessons, useLessonNote } from "@/lib/learning-store";
+import { CourseReviews } from "./course-reviews";
 import {
   ArrowRightIcon,
   AwardIcon,
@@ -14,8 +17,11 @@ import {
   ChevronRightIcon,
   ClockIcon,
   CloseIcon,
+  DownloadIcon,
   LessonIcon,
   ListIcon,
+  LockIcon,
+  PlayIcon,
   StarIcon,
   UsersIcon,
 } from "./icons";
@@ -27,6 +33,10 @@ export type PlayerCourse = {
   slug: string;
   title: string;
   summary: string;
+  image: string;
+  /** The lowest plan that includes the course, and its display name */
+  access: "warm-up" | "resident" | "headliner";
+  accessName: string;
   level: string;
   durationLabel: string;
   students: number;
@@ -35,17 +45,33 @@ export type PlayerCourse = {
   instructor: { name: string; image: string; specialty: string; bio: string };
 };
 
-type Tab = "overview" | "notes" | "instructor";
+type Tab = "overview" | "notes" | "reviews" | "instructor";
 const UP_NEXT_SECONDS = 8;
+
+/**
+ * What the student may do in this course, learned from the first lesson the
+ * server answers for: signin = signed out; limited = signed in, but their plan
+ * only opens the free previews; full = their plan includes the course.
+ */
+type CourseAccess = "unknown" | "signin" | "limited" | "full";
+
+function accessFrom(result: LessonAccess): CourseAccess | null {
+  if (result.status === "signin") return "signin";
+  if (result.status === "upgrade") return "limited";
+  if (result.status === "ok") return result.full ? "full" : "limited";
+  return null;
+}
 
 export function CoursePlayer({
   course,
   sections,
   initialLesson,
+  reviews,
 }: {
   course: PlayerCourse;
   sections: CurriculumSection[];
   initialLesson: string;
+  reviews: PublicReview[];
 }) {
   const lessons = sections.flatMap((section, s) => section.lessons.map((lesson) => ({ ...lesson, section: s })));
   const [currentSlug, setCurrentSlug] = useState(initialLesson);
@@ -54,7 +80,66 @@ export function CoursePlayer({
   const prev = lessons[index - 1];
   const next = lessons[index + 1];
 
-  const { completed, setDone } = useCompletedLessons(course.slug);
+  // Each lesson's video comes from the server, which checks sign-in and plan (openLesson).
+  const [answers, setAnswers] = useState<Partial<Record<string, LessonAccess>>>({});
+  const [courseAccess, setCourseAccess] = useState<CourseAccess>("unknown");
+  const [retry, setRetry] = useState(0);
+  const isLocked = (l: Lesson) => courseAccess === "signin" || (courseAccess === "limited" && !l.preview);
+  // Locked lessons are known without asking the server again.
+  const lessonLocked = isLocked(lesson);
+  const gate: LessonAccess | "loading" = lessonLocked
+    ? courseAccess === "signin"
+      ? { status: "signin" }
+      : { status: "upgrade", plan: course.access }
+    : (answers[lesson.slug] ?? "loading");
+
+  useEffect(() => {
+    if (lessonLocked) return;
+    let cancelled = false;
+    openLesson(course.slug, lesson.slug).then(
+      (result) => {
+        if (cancelled) return;
+        setAnswers((all) => ({ ...all, [lesson.slug]: result }));
+        const access = accessFrom(result);
+        if (access) setCourseAccess(access);
+      },
+      () => {
+        if (!cancelled) {
+          setAnswers((all) => ({ ...all, [lesson.slug]: { status: "error", error: "We couldn't load this lesson. Check your connection and try again." } }));
+        }
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [course.slug, lesson.slug, lessonLocked, retry]);
+
+  // Progress is tracked for students whose plan includes the course: saved in this
+  // browser straight away and to their account, so it follows them between devices.
+  const canTrack = courseAccess === "full";
+  const { completed: localCompleted, setDone: setLocalDone } = useCompletedLessons(course.slug);
+  const completed = canTrack ? localCompleted : [];
+  const setDone = (slug: string, done: boolean) => {
+    if (!canTrack) return;
+    setLocalDone(slug, done);
+    saveLessonProgress(course.slug, slug, done).catch(() => {});
+  };
+
+  // Upload progress made on this device and pull in progress from other devices.
+  useEffect(() => {
+    if (!canTrack) return;
+    let cancelled = false;
+    syncCourseProgress(course.slug, readCompletedLessons(course.slug)).then(
+      (result) => {
+        if (!cancelled && result.ok) mergeCompletedLessons(course.slug, result.record);
+      },
+      () => {},
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [canTrack, course.slug]);
+  const previewLesson = courseAccess === "limited" ? lessons.find((l) => l.preview && l.slug !== lesson.slug) : undefined;
   const doneCount = lessons.filter((l) => completed.includes(l.slug)).length;
   const percent = Math.round((doneCount / lessons.length) * 100);
   const isDone = completed.includes(lesson.slug);
@@ -77,7 +162,7 @@ export function CoursePlayer({
 
   function onVideoEnded() {
     setDone(lesson.slug, true);
-    if (next) setUpNext(UP_NEXT_SECONDS);
+    if (next && !isLocked(next)) setUpNext(UP_NEXT_SECONDS);
   }
 
   // "Up next" countdown after a video ends.
@@ -88,17 +173,15 @@ export function CoursePlayer({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [upNext]);
 
-  const videoId = youtubeId(lesson.youtube);
-
   return (
     <div className="flex min-h-dvh flex-col">
       {/* Top bar */}
       <header className="sticky top-0 z-40 flex h-16 items-center gap-4 border-b border-border bg-background/90 px-4 backdrop-blur-xl sm:px-6">
-        <Logo />
+        <Logo size="xs" />
         <span aria-hidden="true" className="hidden h-6 w-px bg-border md:block" />
         <p className="hidden min-w-0 flex-1 truncate text-[0.9375rem] font-semibold text-foreground md:block">{course.title}</p>
         <div className="ml-auto flex items-center gap-1.5 sm:gap-3">
-          <ProgressRing percent={percent} />
+          {canTrack && <ProgressRing percent={percent} />}
           <button
             type="button"
             onClick={() => setSidebarOpen((o) => !o)}
@@ -132,12 +215,26 @@ export function CoursePlayer({
         <section aria-label="Lesson player" className="[grid-area:player]">
           <div className="bg-neutral-950">
             <div className="relative mx-auto aspect-video w-full lg:max-w-[calc((100dvh-12rem)*16/9)]">
-              {videoId ? (
-                <YouTubePlayer key={lesson.slug} videoId={videoId} title={lesson.title} autoplay={autoplay} onEnded={onVideoEnded} onPlay={() => setAutoplay(true)} />
+              {gate !== "loading" && gate.status === "ok" ? (
+                gate.videoId ? (
+                  <YouTubePlayer key={lesson.slug} videoId={gate.videoId} title={lesson.title} autoplay={autoplay} onEnded={onVideoEnded} onPlay={() => setAutoplay(true)} />
+                ) : (
+                  <p className="absolute inset-0 flex items-center justify-center p-6 text-center text-white/70">
+                    This lesson&apos;s video isn&apos;t ready yet. Try the next lesson.
+                  </p>
+                )
               ) : (
-                <p className="absolute inset-0 flex items-center justify-center p-6 text-center text-white/70">
-                  This lesson&apos;s video link isn&apos;t a valid YouTube URL.
-                </p>
+                <LessonGate
+                  gate={gate}
+                  course={course}
+                  lesson={lesson}
+                  previewLesson={previewLesson}
+                  onPreview={() => previewLesson && goTo(previewLesson, true)}
+                  onRetry={() => {
+                    setAnswers((all) => Object.fromEntries(Object.entries(all).filter(([slug]) => slug !== lesson.slug)));
+                    setRetry((n) => n + 1);
+                  }}
+                />
               )}
 
               {upNext !== null && next && (
@@ -196,11 +293,13 @@ export function CoursePlayer({
                   type="button"
                   onClick={() => setDone(lesson.slug, !isDone)}
                   aria-pressed={isDone}
+                  disabled={!canTrack}
+                  title={canTrack ? undefined : courseAccess === "signin" ? "Log in to track your progress" : "Progress is tracked once your plan includes this course"}
                   className={`inline-flex h-10 items-center gap-2 rounded-lg border px-4 text-sm font-semibold transition ${
                     isDone
                       ? "border-brand/30 bg-brand/10 text-brand-deep dark:text-brand"
                       : "border-border bg-card text-foreground shadow-xs hover:bg-muted"
-                  }`}
+                  } disabled:opacity-50`}
                 >
                   <CheckIcon className="size-4" />
                   {isDone ? "Completed" : "Mark as complete"}
@@ -226,14 +325,17 @@ export function CoursePlayer({
             className={`[grid-area:aside] border-t border-border bg-muted/40 lg:sticky lg:top-16 lg:h-[calc(100dvh-4rem)] lg:self-start lg:overflow-y-auto lg:border-t-0 lg:border-l ${
               sidebarOpen ? "" : "lg:hidden"
             }`}
-            data-lenis-prevent
           >
             <div className="border-b border-border bg-background/60 px-5 py-4">
               <div className="flex items-baseline justify-between gap-3">
                 <h2 className="text-base font-semibold text-foreground">Course content</h2>
-                <p className="text-sm text-muted-foreground">
-                  <span className="font-semibold text-foreground">{doneCount}</span> of {lessons.length} done
-                </p>
+                {canTrack ? (
+                  <p className="text-sm text-muted-foreground">
+                    <span className="font-semibold text-foreground">{doneCount}</span> of {lessons.length} done
+                  </p>
+                ) : (
+                  <p className="text-sm text-muted-foreground">{lessons.length} lessons</p>
+                )}
               </div>
               <div
                 role="progressbar"
@@ -282,6 +384,9 @@ export function CoursePlayer({
                             number={lessons.indexOf(item) + 1}
                             current={item.slug === lesson.slug}
                             done={completed.includes(item.slug)}
+                            locked={isLocked(item)}
+                            showPreview={courseAccess !== "full" && !!item.preview}
+                            canTrack={canTrack}
                             onSelect={() => goTo(item)}
                             onToggle={() => setDone(item.slug, !completed.includes(item.slug))}
                           />
@@ -292,9 +397,18 @@ export function CoursePlayer({
                 );
               })}
 
+              {courseAccess === "limited" && (
+                <Link
+                  href={`/checkout?plan=${course.access}`}
+                  className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-brand text-sm font-semibold text-white transition hover:brightness-110"
+                >
+                  <LockIcon className="size-4" />
+                  Unlock every lesson with {course.accessName}
+                </Link>
+              )}
               <button
                 type="button"
-                disabled={!allDone}
+                disabled={!allDone || !canTrack}
                 onClick={() => setFinished(true)}
                 className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-brand text-sm font-semibold text-white transition hover:brightness-110 disabled:bg-brand/15 disabled:text-brand-deep/60 dark:disabled:text-brand/60"
               >
@@ -307,7 +421,15 @@ export function CoursePlayer({
         {/* Tabs */}
         <section aria-label="Lesson details" className="[grid-area:details]">
           <div className="site-container pb-16">
-            <LessonTabs tab={tab} setTab={setTab} course={course} lesson={lesson} lessonsCount={lessons.length} />
+            <LessonTabs
+              tab={tab}
+              setTab={setTab}
+              course={course}
+              lesson={lesson}
+              lessonsCount={lessons.length}
+              reviews={reviews}
+              resources={gate !== "loading" && gate.status === "ok" ? gate.resources : []}
+            />
           </div>
         </section>
       </div>
@@ -322,6 +444,9 @@ function LessonRow({
   number,
   current,
   done,
+  locked,
+  showPreview,
+  canTrack,
   onSelect,
   onToggle,
 }: {
@@ -329,32 +454,148 @@ function LessonRow({
   number: number;
   current: boolean;
   done: boolean;
+  locked: boolean;
+  showPreview: boolean;
+  canTrack: boolean;
   onSelect: () => void;
   onToggle: () => void;
 }) {
   return (
     <li className={`flex items-start gap-3 px-4 py-3 transition ${current ? "bg-brand/[0.08]" : "hover:bg-muted"}`}>
-      <button
-        type="button"
-        onClick={onToggle}
-        aria-label={done ? `Mark "${lesson.title}" as not done` : `Mark "${lesson.title}" as done`}
-        aria-pressed={done}
-        className={`mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full border-2 transition ${
-          done ? "border-brand bg-brand text-white" : "border-foreground/25 hover:border-brand"
-        }`}
-      >
-        {done && <CheckIcon className="size-3" strokeWidth={3.5} />}
-      </button>
+      {canTrack ? (
+        <ProgressToggle title={lesson.title} done={done} onToggle={onToggle} />
+      ) : (
+        <span aria-hidden="true" className="mt-0.5 flex size-5 shrink-0 items-center justify-center text-muted-foreground">
+          {locked ? <LockIcon className="size-4" /> : <PlayIcon className="size-3.5" />}
+        </span>
+      )}
       <button type="button" onClick={onSelect} aria-current={current ? "true" : undefined} className="min-w-0 flex-1 text-left">
         <span className={`block text-sm leading-snug ${current ? "font-semibold text-brand-deep dark:text-brand" : "text-foreground"}`}>
           {number}. {lesson.title}
         </span>
-        <span className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
+        <span className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
           <LessonIcon className="size-3.5" />
           {current ? "Now playing" : "Video"} · {formatClock(lesson.durationSeconds)}
+          {showPreview && (
+            <span className="rounded-full bg-brand/10 px-2 py-0.5 text-[0.6875rem] font-semibold text-brand-deep dark:text-brand">
+              Free preview
+            </span>
+          )}
+          {locked && <span className="sr-only">(locked)</span>}
         </span>
       </button>
     </li>
+  );
+}
+
+function ProgressToggle({ title, done, onToggle }: { title: string; done: boolean; onToggle: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-label={done ? `Mark "${title}" as not done` : `Mark "${title}" as done`}
+      aria-pressed={done}
+      className={`mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full border-2 transition ${
+        done ? "border-brand bg-brand text-white" : "border-foreground/25 hover:border-brand"
+      }`}
+    >
+      {done && <CheckIcon className="size-3" strokeWidth={3.5} />}
+    </button>
+  );
+}
+
+function LessonGate({
+  gate,
+  course,
+  lesson,
+  previewLesson,
+  onPreview,
+  onRetry,
+}: {
+  gate: Exclude<LessonAccess, { status: "ok" }> | "loading";
+  course: PlayerCourse;
+  lesson: Lesson;
+  previewLesson?: Lesson;
+  onPreview: () => void;
+  onRetry: () => void;
+}) {
+  const here = `/courses/${course.slug}?lesson=${lesson.slug}`;
+  const button = "inline-flex h-11 items-center justify-center gap-2 rounded-lg px-5 text-sm font-semibold transition";
+  const ghost = `${button} border border-white/25 text-white hover:bg-white/10`;
+  let body: ReactNode;
+
+  if (gate === "loading") {
+    body = (
+      <p role="status" className="flex items-center gap-3 text-sm text-white/80">
+        <span aria-hidden="true" className="size-5 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+        Loading lesson…
+      </p>
+    );
+  } else if (gate.status === "signin") {
+    body = (
+      <div className="max-w-md">
+        <span className="mx-auto flex size-12 items-center justify-center rounded-full bg-white/10">
+          <PlayIcon className="size-5" />
+        </span>
+        <h2 className="mt-4 text-xl font-bold sm:text-2xl">Sign in to start watching</h2>
+        <p className="mt-2 text-sm text-white/75 sm:text-[0.9375rem]">
+          Create a free account to watch lessons, save your progress and pick up where you left off on any device.
+        </p>
+        <div className="mt-6 flex flex-col justify-center gap-2 sm:flex-row">
+          <Link href={`/sign-up?next=${encodeURIComponent(here)}`} className={`${button} bg-brand text-white hover:brightness-110`}>
+            Create free account
+          </Link>
+          <Link href={`/login?next=${encodeURIComponent(here)}`} className={ghost}>
+            Log in
+          </Link>
+        </div>
+      </div>
+    );
+  } else if (gate.status === "upgrade") {
+    body = (
+      <div className="max-w-md">
+        <span className="mx-auto flex size-12 items-center justify-center rounded-full bg-white/10">
+          <LockIcon className="size-5" />
+        </span>
+        <h2 className="mt-4 text-xl font-bold sm:text-2xl">Unlock this lesson with {course.accessName}</h2>
+        <p className="mt-2 text-sm text-white/75 sm:text-[0.9375rem]">
+          {course.title} is included in the {course.accessName} plan and up. Pay once, keep it for life, and track your progress.
+        </p>
+        <div className="mt-6 flex flex-col justify-center gap-2 sm:flex-row">
+          <Link href={`/checkout?plan=${gate.plan}`} className={`${button} bg-brand text-white hover:brightness-110`}>
+            Upgrade to {course.accessName}
+            <ArrowRightIcon className="size-4" />
+          </Link>
+          {previewLesson ? (
+            <button type="button" onClick={onPreview} className={ghost}>
+              Watch a free preview
+            </button>
+          ) : (
+            <Link href="/pricing" className={ghost}>
+              Compare plans
+            </Link>
+          )}
+        </div>
+      </div>
+    );
+  } else if (gate.status === "not_found") {
+    body = <p className="text-white/80">This lesson isn&apos;t available right now. Pick another from the course content.</p>;
+  } else {
+    body = (
+      <div className="max-w-md">
+        <p className="text-white/85">{gate.error}</p>
+        <button type="button" onClick={onRetry} className={`${ghost} mt-4`}>
+          Try again
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="absolute inset-0 overflow-hidden">
+      <Image src={course.image} alt="" fill sizes="(min-width: 1024px) 70vw, 100vw" className="object-cover opacity-30" priority />
+      <div className="absolute inset-0 flex items-center justify-center overflow-y-auto bg-neutral-950/60 p-6 text-center text-white">{body}</div>
+    </div>
   );
 }
 
@@ -364,17 +605,22 @@ function LessonTabs({
   course,
   lesson,
   lessonsCount,
+  reviews,
+  resources,
 }: {
   tab: Tab;
   setTab: (tab: Tab) => void;
   course: PlayerCourse;
   lesson: Lesson;
   lessonsCount: number;
+  reviews: PublicReview[];
+  resources: LessonResource[];
 }) {
   const baseId = useId();
   const tabs: { id: Tab; label: string }[] = [
     { id: "overview", label: "Overview" },
     { id: "notes", label: "My notes" },
+    { id: "reviews", label: course.reviews ? `Reviews (${course.reviews})` : "Reviews" },
     { id: "instructor", label: "Instructor" },
   ];
 
@@ -405,6 +651,26 @@ function LessonTabs({
             <div>
               <h2 className="text-lg font-semibold text-foreground">About this lesson</h2>
               <p className="mt-2 text-[0.9375rem] leading-relaxed text-muted-foreground">{lesson.summary}</p>
+              {resources.length > 0 && (
+                <>
+                  <h2 className="mt-8 text-lg font-semibold text-foreground">Lesson downloads</h2>
+                  <ul className="mt-3 flex flex-wrap gap-2">
+                    {resources.map((r) => (
+                      <li key={r.id}>
+                        <a
+                          href={r.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm font-medium text-foreground transition hover:bg-muted"
+                        >
+                          <DownloadIcon className="size-4 text-brand" />
+                          {r.label || "Download"}
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              )}
               <h2 className="mt-8 text-lg font-semibold text-foreground">About this course</h2>
               <p className="mt-2 text-[0.9375rem] leading-relaxed text-muted-foreground">{course.summary}</p>
             </div>
@@ -412,15 +678,22 @@ function LessonTabs({
               <Fact icon={<AwardIcon className="size-4" />} label="Level" value={course.level} />
               <Fact icon={<LessonIcon className="size-4" />} label="Lessons" value={String(lessonsCount)} />
               <Fact icon={<ClockIcon className="size-4" />} label="Length" value={course.durationLabel} />
-              <Fact icon={<UsersIcon className="size-4" />} label="Students" value={course.students.toLocaleString("en-US")} />
+              {course.students > 0 && <Fact icon={<UsersIcon className="size-4" />} label="Students" value={course.students.toLocaleString("en-US")} />}
               <div className="col-span-2 flex items-center gap-1.5 border-t border-border pt-3 text-muted-foreground">
-                <StarIcon fill="currentColor" className="size-4 text-accent-amber" />
-                <span className="font-semibold text-foreground">{course.rating.toFixed(1)}</span> ({course.reviews} reviews)
+                {course.reviews > 0 ? (
+                  <>
+                    <StarIcon fill="currentColor" className="size-4 text-accent-amber" />
+                    <span className="font-semibold text-foreground">{course.rating.toFixed(1)}</span> ({course.reviews} {course.reviews === 1 ? "review" : "reviews"})
+                  </>
+                ) : (
+                  "New course. Be the first to review it."
+                )}
               </div>
             </dl>
           </div>
         )}
         {tab === "notes" && <LessonNotes courseSlug={course.slug} lesson={lesson} />}
+        {tab === "reviews" && <CourseReviews courseSlug={course.slug} rating={course.rating} total={course.reviews} reviews={reviews} />}
         {tab === "instructor" && (
           <div className="flex flex-col gap-5 sm:flex-row">
             <Image

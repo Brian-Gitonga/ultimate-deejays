@@ -1,7 +1,5 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
-import "lenis/dist/lenis.css";
-import { SmoothScroll } from "@/components/smooth-scroll";
 import { siteUrl } from "@/lib/site";
 import "./globals.css";
 
@@ -28,7 +26,6 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     <html
       lang="en"
       data-theme="light"
-      data-scroll-behavior="smooth"
       suppressHydrationWarning
       className={`${inter.variable} h-full antialiased`}
     >
@@ -36,7 +33,6 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
       <body className="min-h-full flex flex-col">
-        <SmoothScroll />
         {children}
       </body>
     </html>

@@ -1,9 +1,10 @@
 import Image from "next/image";
-import { instructors } from "@/lib/content";
+import { getInstructors } from "@/lib/db/instructors";
 import { Carousel } from "./carousel";
 import { SectionHeading } from "./section-heading";
 
-export function Instructors() {
+export async function Instructors() {
+  const instructors = await getInstructors();
   return (
     <section id="instructors" aria-labelledby="instructors-title" className="py-16 lg:py-24">
       <div className="site-container">
@@ -14,7 +15,7 @@ export function Instructors() {
           description="Learn from DJs who play clubs, festivals and weddings every week, and love teaching what they know."
         />
 
-        <div className="reveal mt-10 lg:mt-12">
+        <div className="mt-10 lg:mt-12">
           <Carousel
             label="Instructors"
             controls="sides"

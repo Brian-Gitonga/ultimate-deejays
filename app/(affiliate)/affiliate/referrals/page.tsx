@@ -1,18 +1,19 @@
 import type { Metadata } from "next";
-import { connection } from "next/server";
 import { ReferralsTable } from "@/components/affiliate/referrals-table";
 import { ReferralStatusBadge, referralStatus } from "@/components/affiliate/referral-status";
 import { CheckIcon, ClockIcon, UsersIcon, WalletIcon } from "@/components/icons";
 import { Kpi, Panel, StudioPageHeader } from "@/components/studio/ui";
-import { getAffiliatePortal } from "@/lib/affiliate-portal";
+import { requireAffiliate } from "@/lib/dal";
+import { getAffiliatePortal } from "@/lib/db/affiliate-portal";
+import { moneyFormatter } from "@/lib/money";
 
 export const metadata: Metadata = { title: "Referrals" };
 
-const usd = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
 
 export default async function AffiliateReferralsPage() {
-  await connection();
-  const { affiliate, referrals, links, balance, program } = getAffiliatePortal(new Date().toISOString().slice(0, 10));
+  const viewer = await requireAffiliate();
+  const { affiliate, referrals, links, balance, program } = await getAffiliatePortal(viewer);
+  const money = moneyFormatter(program.currency);
   const count = (s: string) => referrals.filter((r) => r.status === s).length;
 
   return (
@@ -22,9 +23,9 @@ export default async function AffiliateReferralsPage() {
 
         <ul className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
           <Kpi icon={UsersIcon} label="Paid referrals" value={String(referrals.length - count("refunded"))} note={`${count("refunded")} refunded`} />
-          <Kpi icon={ClockIcon} label="Pending" value={usd.format(balance.pending)} note={`${count("pending")} sales in the ${program.refundWindow}-day refund window`} />
-          <Kpi icon={CheckIcon} label="Cleared" value={usd.format(balance.approved)} note="Goes out in your next payout" />
-          <Kpi icon={WalletIcon} label="Paid to you" value={usd.format(balance.paidOut)} note={`${usd.format(balance.lifetime)} earned in total`} />
+          <Kpi icon={ClockIcon} label="Pending" value={money(balance.pending)} note={`${count("pending")} sales in the ${program.refundWindow}-day refund window`} />
+          <Kpi icon={CheckIcon} label="Cleared" value={money(balance.approved)} note="Goes out in your next payout" />
+          <Kpi icon={WalletIcon} label="Paid to you" value={money(balance.paidOut)} note={`${money(balance.lifetime)} earned in total`} />
         </ul>
 
         <ReferralsTable referrals={referrals} links={links.map(({ id, label }) => ({ id, label }))} rate={affiliate.commission} />

@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { HeaderAuth } from "./header-auth";
 import { HeaderShell } from "./header-shell";
 import { Logo } from "./logo";
 import { MobileNav } from "./mobile-nav";
@@ -16,36 +16,33 @@ const navLinks: NavLink[] = [
   { label: "Blog", href: "/blog" },
 ];
 
+/*
+ * Logo on the left, the links centred, actions on the right. The two sides
+ * share the leftover space equally, so the links sit in the middle of the bar.
+ * Below lg the links move into the menu button; the main call to action stays
+ * visible from sm up.
+ */
 export function SiteHeader() {
   return (
     <HeaderShell>
-      <Logo />
+      <div className="flex min-w-0 flex-1 items-center">
+        <Logo size="sm" />
+      </div>
 
-      <nav aria-label="Main" className="hidden items-center gap-7 xl:flex">
+      <nav aria-label="Main" className="hidden shrink-0 items-center gap-0.5 lg:flex">
         <NavLinks links={navLinks} />
       </nav>
 
-      <div className="flex items-center gap-1 sm:gap-2.5">
-        <ThemeToggle />
+      <div className="flex flex-1 items-center justify-end gap-1">
+        <ThemeToggle className="size-10 rounded-full" />
         <button
           type="button"
           aria-label="Region: United States"
-          className="hidden h-10 items-center rounded-lg px-2.5 text-base text-foreground hover:bg-foreground/5 sm:inline-flex"
+          className="hidden h-9 items-center rounded-full px-2.5 text-sm font-medium text-foreground/70 transition-colors hover:bg-foreground/[0.06] hover:text-foreground 2xl:inline-flex"
         >
           US
         </button>
-        <Link
-          href="/sign-up"
-          className="hidden h-10 items-center rounded-lg border border-border bg-background px-4 text-base font-medium whitespace-nowrap text-foreground shadow-xs hover:bg-foreground/5 xl:inline-flex"
-        >
-          Sign up
-        </Link>
-        <Link
-          href="/login"
-          className="hidden h-10 items-center rounded-lg bg-[#18181b] px-4 text-base font-medium whitespace-nowrap text-white hover:bg-[#27272a] xl:inline-flex dark:bg-foreground dark:text-background dark:hover:bg-foreground/90"
-        >
-          Log in
-        </Link>
+        <HeaderAuth />
         <MobileNav links={navLinks} />
       </div>
     </HeaderShell>

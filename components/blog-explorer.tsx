@@ -17,8 +17,6 @@ import {
 } from "./icons";
 import { PostCard } from "./post-card";
 
-const PAGE_SIZE = 12;
-
 // Every word must appear somewhere in the title, summary, category or author.
 const matches = (post: Post, query: string) =>
   matchesQuery([post.title, post.excerpt, post.category.name, post.author.name], query);
@@ -29,7 +27,19 @@ const matches = (post: Post, query: string) =>
  * replaceState so any view can be shared or reloaded. Every control is also a
  * real link or GET form, so it works before hydration and without JavaScript.
  */
-export function BlogExplorer({ posts, initial }: { posts: Post[]; initial: BlogFilters }) {
+export function BlogExplorer({
+  posts,
+  initial,
+  heading = "Latest posts",
+  pageSize = 12,
+}: {
+  posts: Post[];
+  initial: BlogFilters;
+  /** From Studio → Settings → Blog */
+  heading?: string;
+  pageSize?: number;
+}) {
+  const PAGE_SIZE = Math.max(1, pageSize);
   const [filters, setFilters] = useState(initial);
 
   /*
@@ -71,8 +81,7 @@ export function BlogExplorer({ posts, initial }: { posts: Post[]; initial: BlogF
       window.history.replaceState(null, "", href);
     }
     if (scrollToTop) {
-      const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-      document.getElementById("posts")?.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "start" });
+      document.getElementById("posts")?.scrollIntoView({ block: "start" });
     }
   }
 
@@ -140,7 +149,6 @@ export function BlogExplorer({ posts, initial }: { posts: Post[]; initial: BlogF
             <h2 className="mt-6 text-base font-semibold text-foreground">Categories</h2>
             {/* Scrollable chips on small screens, a radio-style list in the desktop sidebar */}
             <ul
-              data-lenis-prevent-horizontal
               className="no-scrollbar -mx-4 mt-3 flex gap-2 overflow-x-auto px-4 sm:-mx-5 sm:px-5 lg:mx-0 lg:mt-2 lg:flex-col lg:gap-0.5 lg:overflow-visible lg:px-0"
             >
               {categoryOptions.map((option) => {
@@ -179,7 +187,7 @@ export function BlogExplorer({ posts, initial }: { posts: Post[]; initial: BlogF
         <section id="posts" aria-labelledby="posts-title" className="min-w-0">
           <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-1">
             <h1 id="posts-title" className="text-[1.625rem] leading-tight font-bold tracking-tight text-foreground sm:text-[1.75rem]">
-              {trimmedQuery ? `Results for “${trimmedQuery}”` : (activeCategory?.name ?? "All Posts")}
+              {trimmedQuery ? `Results for “${trimmedQuery}”` : (activeCategory?.name ?? heading)}
             </h1>
             <p aria-live="polite" className="text-sm text-muted-foreground">
               {results.length} {results.length === 1 ? "post" : "posts"}

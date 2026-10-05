@@ -6,12 +6,12 @@ import { ManageTable } from "../studio/manage-table";
 import { PlanBadge, planName } from "../studio/student-manager";
 import { secondaryButton } from "../studio/ui";
 import { ReferralStatusBadge, referralStatus } from "./referral-status";
+import { useMoney } from "../money-context";
 
-const usd = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
 const date = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
 
-function exportCsv(rows: Referral[], linkName: (id: string) => string) {
-  const header = ["Date", "Customer", "Country", "Plan", "Sale USD", "Commission USD", "Status", "Clears on", "Link"];
+function exportCsv(rows: Referral[], linkName: (id: string) => string, currency: string) {
+  const header = ["Date", "Customer", "Country", "Plan", `Sale ${currency}`, `Commission ${currency}`, "Status", "Clears on", "Link"];
   const body = rows.map((r) => [r.date, r.customer, r.country, planName(r.plan), r.sale, r.commission, referralStatus[r.status].label, r.clearsOn, linkName(r.linkId)]);
   const csv = [header, ...body].map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\n");
   const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
@@ -21,6 +21,7 @@ function exportCsv(rows: Referral[], linkName: (id: string) => string) {
 }
 
 export function ReferralsTable({ referrals, links, rate }: { referrals: Referral[]; links: Pick<TrackedLink, "id" | "label">[]; rate: number }) {
+  const { exact: money, currency } = useMoney();
   const linkName = (id: string) => links.find((l) => l.id === id)?.label ?? "Referral code";
   return (
     <ManageTable
@@ -32,7 +33,7 @@ export function ReferralsTable({ referrals, links, rate }: { referrals: Referral
       searchPlaceholder="Search name, country or link"
       initialSort={{ key: "date", dir: -1 }}
       toolbar={
-        <button type="button" onClick={() => exportCsv(referrals, linkName)} className={`${secondaryButton} h-10`}>
+        <button type="button" onClick={() => exportCsv(referrals, linkName, currency)} className={`${secondaryButton} h-10`}>
           <DownloadIcon className="size-4" /> Export CSV
         </button>
       }
@@ -69,14 +70,14 @@ export function ReferralsTable({ referrals, links, rate }: { referrals: Referral
             </span>
           ),
         },
-        { key: "sale", header: "Sale", align: "right", sort: (r) => r.sale, render: (r) => <span className="tabular-nums">{usd.format(r.sale)}</span> },
+        { key: "sale", header: "Sale", align: "right", sort: (r) => r.sale, render: (r) => <span className="tabular-nums">{money(r.sale)}</span> },
         {
           key: "commission",
           header: "You earn",
           align: "right",
           sort: (r) => r.commission,
           render: (r) => (
-            <span className={`font-semibold tabular-nums ${r.status === "refunded" ? "text-muted-foreground line-through" : "text-foreground"}`}>{usd.format(r.status === "refunded" ? (r.sale * rate) / 100 : r.commission)}</span>
+            <span className={`font-semibold tabular-nums ${r.status === "refunded" ? "text-muted-foreground line-through" : "text-foreground"}`}>{money(r.status === "refunded" ? (r.sale * rate) / 100 : r.commission)}</span>
           ),
         },
         { key: "link", header: "From", sort: (r) => linkName(r.linkId), render: (r) => <span className="whitespace-nowrap text-muted-foreground">{linkName(r.linkId)}</span> },

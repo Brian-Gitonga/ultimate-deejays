@@ -27,8 +27,8 @@ const looks: Record<CategorySlug, { icon: ComponentType<SVGProps<SVGSVGElement>>
   "branding-gigs": { icon: MegaphoneIcon, tone: "bg-tint-cream [--icon:var(--accent-amber)]" },
 };
 
-export function FeaturedCategories() {
-  const counts = countCoursesByCategory();
+export async function FeaturedCategories() {
+  const counts = await countCoursesByCategory();
   const categories = courseCategories.map(({ slug, name }) => ({ slug, name, courses: counts[slug], ...looks[slug] }));
 
   return (
@@ -40,7 +40,7 @@ export function FeaturedCategories() {
         description="Pick a lane and go deep. Every category is taught by working DJs who play these styles every weekend."
       />
 
-      <ul className="reveal mt-10 grid gap-4 sm:grid-cols-2 sm:gap-6 lg:mt-12 lg:grid-cols-4">
+      <ul className="mt-10 grid gap-4 sm:grid-cols-2 sm:gap-6 lg:mt-12 lg:grid-cols-4">
         {categories.map(({ name, slug, courses, icon: Icon, tone }) => (
           <li key={slug}>
             <Link

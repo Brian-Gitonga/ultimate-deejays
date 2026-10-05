@@ -9,19 +9,20 @@ import { Newsletter } from "@/components/newsletter";
 import { PostCard } from "@/components/post-card";
 import { ReadingProgress } from "@/components/reading-progress";
 import { ShareButtons } from "@/components/share-buttons";
-import { articles, tableOfContents } from "@/lib/articles";
-import { getPost, posts, type Instructor } from "@/lib/content";
+import { tableOfContents } from "@/lib/articles";
+import type { Instructor } from "@/lib/content";
+import { getLivePost, getLivePosts } from "@/lib/db/posts";
+import { getSiteSettings } from "@/lib/db/settings";
+import { markdownToBlocks } from "@/lib/markdown";
 import { siteName, siteUrl } from "@/lib/site";
 
-// Every post is built ahead of time; any other slug is a 404.
-export const dynamicParams = false;
-
-export function generateStaticParams() {
-  return posts.map((post) => ({ slug: post.slug }));
+// Live posts are built ahead of time; posts published later render on first visit.
+export async function generateStaticParams() {
+  return (await getLivePosts()).map((post) => ({ slug: post.slug }));
 }
 
 export async function generateMetadata({ params }: PageProps<"/blog/[slug]">): Promise<Metadata> {
-  const post = getPost((await params).slug);
+  const post = await getLivePost((await params).slug);
   if (!post) return {};
 
   return {
@@ -45,10 +46,11 @@ export async function generateMetadata({ params }: PageProps<"/blog/[slug]">): P
 const dateFormat = new Intl.DateTimeFormat("en-US", { month: "long", day: "numeric", year: "numeric", timeZone: "UTC" });
 
 export default async function PostPage({ params }: PageProps<"/blog/[slug]">) {
-  const post = getPost((await params).slug);
+  const [post, posts, settings] = await Promise.all([getLivePost((await params).slug), getLivePosts(), getSiteSettings()]);
   if (!post) notFound();
 
-  const article = articles[post.slug];
+  const blog = settings.blog;
+  const article = { excerpt: post.excerpt, body: markdownToBlocks(post.body) };
   const toc = tableOfContents(article);
   const others = posts.filter((p) => p.slug !== post.slug);
   const related = [
@@ -70,7 +72,7 @@ export default async function PostPage({ params }: PageProps<"/blog/[slug]">) {
 
   return (
     <main className="flex-1">
-      <ReadingProgress targetId="article-content" />
+      {blog.showReadingProgress && <ReadingProgress targetId="article-content" />}
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, "\\u003c") }}
@@ -173,11 +175,13 @@ export default async function PostPage({ params }: PageProps<"/blog/[slug]">) {
               </div>
 
               <footer className="mx-auto mt-14 max-w-[43.75rem] space-y-10">
-                <div className="flex flex-col gap-4 border-y border-border py-6 sm:flex-row sm:items-center sm:justify-between">
-                  <p className="font-semibold text-foreground">Share this article</p>
-                  <ShareButtons title={post.title} />
-                </div>
-                <AuthorCard author={post.author} />
+                {blog.showShare && (
+                  <div className="flex flex-col gap-4 border-y border-border py-6 sm:flex-row sm:items-center sm:justify-between">
+                    <p className="font-semibold text-foreground">Share this article</p>
+                    <ShareButtons title={post.title} />
+                  </div>
+                )}
+                {blog.showAuthorBox && <AuthorCard author={post.author} />}
               </footer>
             </div>
 
@@ -206,6 +210,7 @@ export default async function PostPage({ params }: PageProps<"/blog/[slug]">) {
         </div>
       </article>
 
+      {blog.showRelated && related.length > 0 && (
       <section aria-labelledby="related-title" className="border-t border-border bg-cream py-20 lg:py-24">
         <div className="site-container">
           <div className="flex flex-wrap items-end justify-between gap-4">
@@ -229,10 +234,13 @@ export default async function PostPage({ params }: PageProps<"/blog/[slug]">) {
           </ul>
         </div>
       </section>
+      )}
 
-      <div className="pt-20 lg:pt-28">
-        <Newsletter />
-      </div>
+      {blog.showNewsletter && (
+        <div className="pt-20 lg:pt-28">
+          <Newsletter />
+        </div>
+      )}
     </main>
   );
 }

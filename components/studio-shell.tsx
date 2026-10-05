@@ -2,10 +2,9 @@
 
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { getAffiliateApplications } from "@/lib/affiliates";
-import { useCollection } from "@/lib/studio-store";
 import { DashboardShell, type NavGroup } from "./dashboard-shell";
-import { DashboardIcon, HandshakeIcon, ImageIcon, LessonIcon, MessageIcon, PencilIcon, PlusIcon, SearchIcon, SettingsIcon, StarIcon, TrophyIcon, UsersIcon, WalletIcon } from "./icons";
+import { DashboardIcon, DownloadIcon, HandshakeIcon, ImageIcon, LessonIcon, MailIcon, MessageIcon, MicIcon, PencilIcon, PlusIcon, SearchIcon, SettingsIcon, StarIcon, TagIcon, TrophyIcon, UsersIcon, WalletIcon } from "./icons";
+import { StudioNotices } from "./studio/studio-notices";
 
 const navGroups: NavGroup[] = [
   {
@@ -25,7 +24,8 @@ const navGroups: NavGroup[] = [
         ],
       },
       { href: "/studio/students", label: "Students", icon: UsersIcon },
-      { href: "/studio/feedback", label: "Mix feedback", icon: MessageIcon, badge: "7" },
+      { href: "/studio/instructors", label: "Instructors", icon: MicIcon },
+      { href: "/studio/feedback", label: "Mix feedback", icon: MessageIcon },
       {
         href: "/studio/challenges",
         label: "Challenges",
@@ -50,6 +50,7 @@ const navGroups: NavGroup[] = [
           { href: "/studio/blog/new", label: "Write a post" },
         ],
       },
+      { href: "/studio/store", label: "Store", icon: DownloadIcon },
     ],
   },
   {
@@ -57,21 +58,22 @@ const navGroups: NavGroup[] = [
     items: [
       { href: "/studio/earnings", label: "Earnings", icon: WalletIcon },
       { href: "/studio/affiliates", label: "Affiliates", icon: HandshakeIcon },
+      { href: "/studio/coupons", label: "Coupons", icon: TagIcon },
+      { href: "/studio/subscribers", label: "Subscribers", icon: MailIcon },
       { href: "/studio/media", label: "Media library", icon: ImageIcon },
       { href: "/studio/settings", label: "Settings", icon: SettingsIcon },
     ],
   },
 ];
 
-const affiliateSeed = getAffiliateApplications();
+export type StudioCounts = { affiliates: number; mixes: number; reviews: number; notifications: number };
 
-export function StudioShell({ instructor, children }: { instructor: { name: string; image: string; specialty: string }; children: ReactNode }) {
-  // Show how many affiliate applications are waiting next to "Affiliates".
-  const { items: affiliates } = useCollection("affiliates", affiliateSeed);
-  const pending = affiliates.filter((a) => a.status === "pending").length;
+export function StudioShell({ admin, counts, children }: { admin: { name: string; image: string | null }; counts: StudioCounts; children: ReactNode }) {
+  // Waiting items next to their section: applications, mixes to review, reviews to answer.
+  const badges: Record<string, number> = { "/studio/affiliates": counts.affiliates, "/studio/feedback": counts.mixes, "/studio/reviews": counts.reviews };
   const groups = navGroups.map((g) => ({
     ...g,
-    items: g.items.map((item) => (item.href === "/studio/affiliates" ? { ...item, badge: pending ? String(pending) : undefined } : item)),
+    items: g.items.map((item) => (item.href in badges ? { ...item, badge: badges[item.href] ? String(badges[item.href]) : undefined } : item)),
   }));
 
   return (
@@ -80,7 +82,9 @@ export function StudioShell({ instructor, children }: { instructor: { name: stri
       homeHref="/studio"
       navGroups={groups}
       notificationsHref="/studio/notifications"
-      user={{ name: instructor.name, image: instructor.image, role: "Instructor", href: "/account/profile" }}
+      notificationCount={counts.notifications}
+      notices={<StudioNotices />}
+      user={{ name: admin.name, image: admin.image, role: "Admin", href: "/account/profile" }}
       headerStart={
         <form role="search" action="/studio/search" className="relative hidden max-w-sm flex-1 md:block">
           <label htmlFor="studio-search" className="sr-only">

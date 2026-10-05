@@ -1,13 +1,16 @@
+import Image from "next/image";
 import Link from "next/link";
 import type { ComponentType, SVGProps } from "react";
-import { InstagramIcon, TiktokIcon, XIcon, YoutubeIcon } from "./icons";
+import { getSiteSettings } from "@/lib/db/settings";
+import { telHref, whatsappHref } from "@/lib/contact";
+import { InstagramIcon, TiktokIcon, WhatsappIcon, XIcon, YoutubeIcon } from "./icons";
 import { Logo } from "./logo";
 
-const socials: { label: string; href: string; icon: ComponentType<SVGProps<SVGSVGElement>> }[] = [
-  { label: "Instagram", href: "https://www.instagram.com/", icon: InstagramIcon },
-  { label: "TikTok", href: "https://www.tiktok.com/", icon: TiktokIcon },
-  { label: "YouTube", href: "https://www.youtube.com/", icon: YoutubeIcon },
-  { label: "X", href: "https://x.com/", icon: XIcon },
+const socialIcons: { key: "instagram" | "tiktok" | "youtube" | "x"; label: string; icon: ComponentType<SVGProps<SVGSVGElement>> }[] = [
+  { key: "instagram", label: "Instagram", icon: InstagramIcon },
+  { key: "tiktok", label: "TikTok", icon: TiktokIcon },
+  { key: "youtube", label: "YouTube", icon: YoutubeIcon },
+  { key: "x", label: "X", icon: XIcon },
 ];
 
 const columns: { title: string; links: { label: string; href: string }[] }[] = [
@@ -32,7 +35,12 @@ const columns: { title: string; links: { label: string; href: string }[] }[] = [
   },
 ];
 
-export function SiteFooter() {
+/* Contact details and social links come from Studio → Settings. */
+export async function SiteFooter() {
+  const { general } = await getSiteSettings();
+  const whatsapp = whatsappHref(general.phone);
+  // Empty links are left out, like the Settings page says.
+  const socials = socialIcons.map((s) => ({ ...s, href: general.socials[s.key] })).filter((s) => s.href);
   return (
     <footer className="bg-cream">
       <div className="site-container pt-14 lg:pt-16">
@@ -83,24 +91,33 @@ export function SiteFooter() {
             <div>
               <h2 className="text-lg font-semibold text-foreground">Get in Touch</h2>
               <address className="mt-4 space-y-3 text-[0.9375rem] leading-relaxed text-muted-foreground not-italic">
-                <p>
-                  Studio 7, Soundwave House
-                  <br />
-                  Los Angeles, CA
-                </p>
+                {general.address && <p>{general.address}</p>}
                 <p>
                   Email:{" "}
-                  <a href="mailto:hello@ultimatedeejays.com" className="transition hover:text-brand">
-                    hello@ultimatedeejays.com
+                  <a href={`mailto:${general.supportEmail}`} className="transition hover:text-brand">
+                    {general.supportEmail}
                   </a>
                 </p>
-                <p>
-                  Phone:{" "}
-                  <a href="tel:+13105550142" className="transition hover:text-brand">
-                    +1 (310) 555-0142
-                  </a>
-                </p>
+                {telHref(general.phone) && (
+                  <p>
+                    Phone:{" "}
+                    <a href={telHref(general.phone)} className="transition hover:text-brand">
+                      {general.phone}
+                    </a>
+                  </p>
+                )}
               </address>
+              {whatsapp && (
+                <a
+                  href={whatsapp}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-5 inline-flex h-10 items-center gap-2 rounded-full bg-[#25d366] px-4 text-sm font-semibold text-neutral-900 transition hover:brightness-95"
+                >
+                  <WhatsappIcon className="size-[1.125rem]" />
+                  Chat on WhatsApp
+                </a>
+              )}
             </div>
           </div>
         </div>
@@ -113,10 +130,13 @@ export function SiteFooter() {
   );
 }
 
-/* Simplified wordmarks for the accepted payment methods. */
+/* Accepted payment methods: M-Pesa's logo (public/brands/payments), then simplified wordmarks. */
 function PaymentMethods() {
   return (
-    <ul aria-label="Accepted payment methods" className="mt-4 flex flex-wrap items-center gap-x-7 gap-y-4">
+    <ul aria-label="Accepted payment methods" className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-4">
+      <li>
+        <Image src="/brands/payments/m-pesa.svg" alt="M-Pesa" width={500} height={186} unoptimized className="h-8 w-auto" />
+      </li>
       <li>
         <span className="sr-only">Stripe</span>
         <span aria-hidden="true" className="text-[1.4375rem] font-bold tracking-[-0.06em] text-[#635bff] dark:text-[#9690ff]">

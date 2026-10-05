@@ -1,13 +1,14 @@
 /*
  * Pricing plans. One-time payments: pay once, keep access for life.
- * PLACEHOLDER prices; change them here and every page follows.
+ * These are the defaults: names, prices and highlights saved in Studio →
+ * Settings → Pricing override them on the pricing page and at checkout.
  */
 
 export type Plan = {
   slug: "warm-up" | "resident" | "headliner";
   name: string;
   tagline: string;
-  /** One-time price in USD; 0 = free */
+  /** One-time price in the store currency (Studio → Settings → Currency); 0 = free */
   price: number;
   cta: string;
   href: string;
@@ -35,9 +36,10 @@ export const plans: Plan[] = [
     slug: "resident",
     name: "Resident",
     tagline: "Everything you need to play your first real gigs.",
-    price: 79,
+    price: 10000,
     cta: "Become a Resident",
-    href: "/sign-up?plan=resident",
+    // Signed out: /checkout sends them to sign up first, then back here.
+    href: "/checkout?plan=resident",
     featured: true,
     highlights: [
       "Everything in Warm-Up",
@@ -52,9 +54,9 @@ export const plans: Plan[] = [
     slug: "headliner",
     name: "Headliner",
     tagline: "The full library and direct coaching from working DJs.",
-    price: 149,
+    price: 19000,
     cta: "Go Headliner",
-    href: "/sign-up?plan=headliner",
+    href: "/checkout?plan=headliner",
     highlights: [
       "Everything in Resident",
       "Every course, including Advanced",
