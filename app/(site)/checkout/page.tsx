@@ -7,6 +7,8 @@ import { ArrowRightIcon, CheckIcon, ChevronLeftIcon, HandshakeIcon, TagIcon } fr
 import { formatMoney, isPaidPlan, normalizeCode } from "@/lib/checkout";
 import { priceOrder } from "@/lib/checkout.server";
 import { requireViewer } from "@/lib/dal";
+import { allowanceHighlights } from "@/lib/allowances";
+import { getPlanAllowances } from "@/lib/db/allowances";
 import { getSiteSettings } from "@/lib/db/settings";
 import { isPaystackConfigured } from "@/lib/paystack";
 
@@ -25,7 +27,7 @@ export default async function CheckoutPage({ searchParams }: PageProps<"/checkou
   const typedCode = normalizeCode(one(params.code));
 
   const viewer = await requireViewer(`/checkout?plan=${plan}`);
-  const [settings, result] = await Promise.all([getSiteSettings(), priceOrder(viewer, plan, typedCode)]);
+  const [settings, result, allowances] = await Promise.all([getSiteSettings(), priceOrder(viewer, plan, typedCode), getPlanAllowances()]);
   const planSettings = settings.plans.find((p) => p.slug === plan)!;
 
   if (!result.ok) {
@@ -80,7 +82,7 @@ export default async function CheckoutPage({ searchParams }: PageProps<"/checkou
             </h2>
             <p className="mt-1 text-muted-foreground">{planSettings.tagline}</p>
             <ul className="mt-6 space-y-3">
-              {planSettings.highlights.map((item) => (
+              {[...planSettings.highlights, ...allowanceHighlights(allowances.find((a) => a.plan === plan))].map((item) => (
                 <li key={item} className="flex items-start gap-3 text-[0.9375rem] text-foreground">
                   <span className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full bg-brand/10 text-brand">
                     <CheckIcon className="size-3" strokeWidth={3} />

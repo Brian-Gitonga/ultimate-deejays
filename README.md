@@ -1,6 +1,6 @@
 # Ultimate Deejays
 
-DJ courses, challenges and a blog, plus an instructor studio and an affiliate dashboard.
+DJ courses, a store of downloads and lower thirds (with template edits done by the team), and a blog, plus an instructor studio and an affiliate dashboard.
 Built with Next.js 16 (App Router), Supabase (Postgres, Auth, Storage) and Paystack.
 
 ## Getting started
@@ -28,6 +28,7 @@ and [lib/env.server.ts](lib/env.server.ts) (secrets), which throw one error list
 | `SUPABASE_SECRET_KEY` | Same page, secret (or legacy service_role) key | **no** |
 | `NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY` | Paystack → Settings → API Keys & Webhooks | yes |
 | `PAYSTACK_SECRET_KEY` | Same page. Checkout and refunds need it; see [supabase/README.md → Payments](supabase/README.md#payments-paystack) | **no** |
+| `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET` | Optional. Cloudflare → R2: store files up to 5 GB (setup steps, including the bucket CORS policy, in .env.example) | **no** |
 
 Add the same variables in your hosting provider's settings when you deploy.
 
@@ -36,11 +37,11 @@ Add the same variables in your hosting provider's settings when you deploy.
 | Path | What it's for |
 | --- | --- |
 | [lib/dal.ts](lib/dal.ts) | Who's signed in, their role, plan, status and affiliate status; `requireViewer` / `requireAdmin` / `requireAffiliate` guards |
-| [lib/db/](lib/db/) | Public reads (published courses, posts, challenges, instructors, settings, reviews), cached and refreshed on save |
+| [lib/db/](lib/db/) | Public reads (published courses, posts, store resources and lower thirds, instructors, settings, reviews), cached and refreshed on save |
 | [lib/db/studio/](lib/db/studio/) | Studio reads (drafts, students, payments, affiliates…) with the admin's session |
 | [lib/studio-action.ts](lib/studio-action.ts) | `adminAction()`: every studio Server Action checks admin, saves, refreshes the site, reports errors |
 | [lib/studio-store.ts](lib/studio-store.ts) | `useServerCollection()`: optimistic studio lists backed by Server Actions, plus the error banner |
-| `app/(studio)/studio/*/actions.ts` | Studio Server Actions (courses, blog, challenges, students, earnings, affiliates, settings, media, reviews, feedback…) |
+| `app/(studio)/studio/*/actions.ts` | Studio Server Actions (courses, blog, store, students, earnings, affiliates, settings, media, reviews, feedback…) |
 | [lib/markdown.ts](lib/markdown.ts) | The Markdown the blog editor writes ↔ article blocks |
 | [lib/supabase/server.ts](lib/supabase/server.ts) | Supabase as the signed-in user, in Server Components, Server Actions and Route Handlers |
 | [lib/supabase/client.ts](lib/supabase/client.ts) | Supabase as the signed-in user, in client components |
@@ -59,11 +60,13 @@ Add the same variables in your hosting provider's settings when you deploy.
 | [app/api/webhooks/paystack/route.ts](app/api/webhooks/paystack/route.ts) | Paystack webhook: records payments even if the buyer closes the tab |
 | [supabase/](supabase/) | All SQL: migrations, diagnostics and scripts |
 
-Everything the site shows lives in Supabase: content (courses, lessons, blog, challenges,
-instructors, settings), students (plans, enrollments, progress, reviews, mixes, challenge entries,
+Everything the site shows lives in Supabase: content (courses, lessons, blog,
+instructors, settings), students (plans, enrollments, progress, reviews, mixes,
 email preferences), sales (checkout orders, payments, promo codes, refunds) and the affiliate program
 (applications, clicks, sign-ups, commission, payouts, tracking links) and the store (downloadable
-resources, files, download counts). Anyone can browse courses and the store;
+resources, files, download counts; resources marked "lower third" also show on /lower-thirds), template edit
+requests (members fill in a template's form; the team delivers the edited files to their account and can
+text them) and each plan's allowance of downloads and edits. Anyone can browse courses and the store;
 playing a lesson or downloading a file needs an account, and the database only hands out videos and
 files to people whose plan includes them (or for free-preview lessons and free downloads).
 

@@ -70,13 +70,7 @@ with checks (step, item, ok, fix) as (
         to_regclass('public.blog_posts') is not null,
         'Run migrations/…_blog.sql'),
 
-    -- 006 · challenges
-    (6, 'Tables challenges, challenge_entries exist',
-        to_regclass('public.challenges') is not null and to_regclass('public.challenge_entries') is not null,
-        'Run migrations/…_challenges.sql'),
-    (6, 'Entry-count trigger exists',
-        exists (select 1 from pg_trigger where tgname = 'challenge_entries_count'),
-        'Run migrations/…_challenges.sql'),
+    -- 006 · challenges: removed again by 015, so there's nothing to check here.
 
     -- 007 · learning
     (7, 'Profiles have plan and status columns',
@@ -121,11 +115,11 @@ with checks (step, item, ok, fix) as (
         'Run migrations/…_admin_views.sql'),
 
     -- 011 · seed
-    (11, 'Site content is loaded (instructors, courses, posts, challenges, settings)',
-        case when to_regclass('public.site_settings') is null or to_regclass('public.challenges') is null
+    (11, 'Site content is loaded (instructors, courses, posts, settings)',
+        case when to_regclass('public.site_settings') is null
                or to_regclass('public.blog_posts') is null or to_regclass('public.courses') is null then false
              else query_to_xml('select (select count(*) from public.instructors) > 0 and (select count(*) from public.courses) > 0
-                                  and (select count(*) from public.blog_posts) > 0 and (select count(*) from public.challenges) > 0
+                                  and (select count(*) from public.blog_posts) > 0
                                   and exists (select 1 from public.site_settings where id = ''site'') as ok', false, true, '')::text like '%<ok>true</ok>%'
         end,
         'Run migrations/…_seed_content.sql'),
@@ -137,9 +131,8 @@ with checks (step, item, ok, fix) as (
         'Add lessons in Studio → Courses, or re-run migrations/…_seed_content.sql'),
 
     -- 012 · course access
-    (12, 'Functions lesson_video(), studio_lesson_media(), can_enter_challenge() exist',
-        to_regprocedure('public.lesson_video(text,text)') is not null and to_regprocedure('public.studio_lesson_media(uuid)') is not null
-        and to_regprocedure('public.can_enter_challenge(uuid)') is not null,
+    (12, 'Functions lesson_video(), studio_lesson_media() exist',
+        to_regprocedure('public.lesson_video(text,text)') is not null and to_regprocedure('public.studio_lesson_media(uuid)') is not null,
         'Run migrations/…_course_access.sql'),
     (12, 'Lesson videos are hidden from direct reads',
         case when to_regclass('public.course_lessons') is null then false
@@ -150,10 +143,6 @@ with checks (step, item, ok, fix) as (
     (12, 'save_course() can save lesson videos (security definer)',
         coalesce((select prosecdef from pg_proc where oid = to_regprocedure('public.save_course(jsonb)')), false),
         'Run migrations/…_course_access.sql (it must come after …_courses.sql)'),
-    (12, 'Challenge entries need an account',
-        exists (select 1 from pg_policies where schemaname = 'public' and tablename = 'challenge_entries' and policyname = 'Members enter open challenges their plan allows')
-        and not exists (select 1 from pg_policies where schemaname = 'public' and tablename = 'challenge_entries' and policyname = 'Anyone can enter an open challenge'),
-        'Run migrations/…_course_access.sql'),
     (12, 'Column profiles.email_prefs and table newsletter_subscribers exist',
         exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'profiles' and column_name = 'email_prefs')
         and to_regclass('public.newsletter_subscribers') is not null,
@@ -195,7 +184,53 @@ with checks (step, item, ok, fix) as (
              else not has_column_privilege('anon', 'public.store_files', 'path', 'select')
                   and not has_column_privilege('anon', 'public.store_files', 'url', 'select')
         end,
-        'Re-run migrations/…_store.sql')
+        'Re-run migrations/…_store.sql'),
+
+    -- 015 · lower thirds replace challenges
+    (15, 'Column store_resources.lower_third exists',
+        exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'store_resources' and column_name = 'lower_third'),
+        'Run migrations/…_lower_thirds.sql'),
+    (15, 'Challenges are removed (tables, functions, types)',
+        to_regclass('public.challenges') is null and to_regclass('public.challenge_entries') is null
+        and to_regprocedure('public.can_enter_challenge(uuid)') is null and to_regtype('public.challenge_type') is null,
+        'Run migrations/…_lower_thirds.sql'),
+    (15, 'Studio views no longer count challenge entries',
+        not exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'student_overview' and column_name = 'challenge_entries'),
+        'Run migrations/…_lower_thirds.sql'),
+
+    -- 016 · template edits and plan allowances
+    (16, 'Tables plan_allowances, edit_requests, edit_request_messages exist',
+        to_regclass('public.plan_allowances') is not null and to_regclass('public.edit_requests') is not null
+        and to_regclass('public.edit_request_messages') is not null,
+        'Run migrations/…_edits_allowances.sql'),
+    (16, 'Every plan has an allowance row',
+        case when to_regclass('public.plan_allowances') is null then false
+             else query_to_xml('select count(*) = 3 as ok from public.plan_allowances', false, true, '')::text like '%<ok>true</ok>%'
+        end,
+        'Re-run migrations/…_edits_allowances.sql (it adds the default rows)'),
+    (16, 'Functions my_allowance(), request_edit(), studio_edit_requests() exist',
+        to_regprocedure('public.my_allowance()') is not null
+        and to_regprocedure('public.request_edit(text,jsonb,text,text,boolean)') is not null
+        and to_regprocedure('public.studio_edit_requests(uuid)') is not null,
+        'Run migrations/…_edits_allowances.sql'),
+    (16, 'Templates can offer edits; profiles have a phone; coupons can be limited to emails',
+        exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'store_resources' and column_name = 'edit_form')
+        and exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'profiles' and column_name = 'phone')
+        and exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'coupons' and column_name = 'emails'),
+        'Run migrations/…_edits_allowances.sql'),
+    (16, 'Edits bucket exists and is private',
+        exists (select 1 from storage.buckets where id = 'edits' and not public),
+        'Run migrations/…_edits_allowances.sql'),
+    (16, 'Members can''t read the team''s private notes',
+        case when to_regclass('public.edit_requests') is null then false
+             else not has_column_privilege('authenticated', 'public.edit_requests', 'admin_notes', 'select')
+        end,
+        'Re-run migrations/…_edits_allowances.sql'),
+
+    -- 017 · a member's own downloads
+    (17, 'Function my_downloads() exists (Account → Overview)',
+        to_regprocedure('public.my_downloads(integer)') is not null,
+        'Run migrations/…_my_downloads.sql')
 )
 select
   case when ok then '✅' else '❌' end as status,

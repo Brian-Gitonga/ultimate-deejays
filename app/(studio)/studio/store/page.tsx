@@ -5,6 +5,7 @@ import { StoreManager } from "@/components/studio/store-manager";
 import { StudioPageHeader, secondaryButton } from "@/components/studio/ui";
 import { getInstructorOptions } from "@/lib/db/studio/courses";
 import { getStudioStore } from "@/lib/db/studio/store";
+import { availableProviders } from "@/lib/storage.server";
 import { createClient } from "@/lib/supabase/server";
 
 export const metadata: Metadata = { title: "Store" };
@@ -19,12 +20,17 @@ export default async function StudioStorePage() {
           title="Store"
           crumbs={[{ label: "Dashboard", href: "/studio" }, { label: "Store" }]}
           actions={
-            <Link href="/store" target="_blank" className={secondaryButton}>
-              View store <ArrowUpRightIcon className="size-4" />
-            </Link>
+            <>
+              <Link href="/lower-thirds" target="_blank" className={secondaryButton}>
+                View lower thirds <ArrowUpRightIcon className="size-4" />
+              </Link>
+              <Link href="/store" target="_blank" className={secondaryButton}>
+                View store <ArrowUpRightIcon className="size-4" />
+              </Link>
+            </>
           }
         />
-        <StoreManager seed={resources} instructors={instructors} />
+        <StoreManager seed={resources} instructors={instructors} storage={availableProviders()} />
       </div>
     </main>
   );

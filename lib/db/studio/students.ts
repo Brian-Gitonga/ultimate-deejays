@@ -29,7 +29,6 @@ export function toStudent(row: Tables<"student_overview">, enrollments: Tables<"
         progress: e.lessons_total ? Math.min(100, Math.round(((e.lessons_done ?? 0) / e.lessons_total) * 100)) : 0,
         enrolledAt: (e.enrolled_at ?? "").slice(0, 10),
       })),
-    challengeEntries: row.challenge_entries ?? 0,
     mixesSubmitted: row.mixes_submitted ?? 0,
     paid: Number(row.paid ?? 0),
     updatedAt: row.updated_at ?? "",

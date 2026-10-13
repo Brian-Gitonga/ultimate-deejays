@@ -109,7 +109,7 @@ export async function uploadCroppedImage(file: File, folder: MediaFolder, size: 
 }
 
 /*
- * Image field for courses, posts, challenges and instructors: upload (cropped
+ * Image field for courses, posts, store resources and instructors: upload (cropped
  * in the browser, stored in the media library), pick from the library, or remove.
  */
 export function ThumbnailPicker({

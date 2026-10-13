@@ -1,9 +1,11 @@
 import Link from "next/link";
 import { youtubeId } from "@/lib/curriculum";
-import { categoryName, formatBadge, formatDownloads, formatSize, planLabel, timeAgo, type StoreResource } from "@/lib/store";
+import { categoryName, formatBadge, formatDownloads, formatSize, planLabel, resourcePath, timeAgo, type StoreResource } from "@/lib/store";
 import { ChevronRightIcon, HomeIcon } from "../icons";
 import { YouTubePlayer } from "../youtube-player";
-import { DownloadButton, FileList } from "./download-panel";
+import type { EditSetup } from "@/lib/db/edits";
+import type { UpgradeContext } from "@/lib/upgrade";
+import { DownloadButton, FileList, RequestEditButton } from "./download-panel";
 import { CreatorAvatar } from "./store-browser";
 import { StoreCover } from "./store-cover";
 import { StoreViewerProvider } from "./store-viewer";
@@ -12,13 +14,30 @@ const date = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", 
 
 /**
  * A resource's page, laid out like a video page: the preview and download
- * button, the description and files, and more downloads alongside.
+ * button, the description and files, and more downloads alongside. Lower
+ * thirds live under /lower-thirds, with other lower thirds alongside.
  */
-export function StoreResourceView({ resource, all, now }: { resource: StoreResource; all: StoreResource[]; now: number }) {
+export function StoreResourceView({
+  resource,
+  all,
+  now,
+  edits = null,
+  upgrade,
+}: {
+  resource: StoreResource;
+  all: StoreResource[];
+  now: number;
+  edits?: EditSetup | null;
+  /** Plans and prices, for the prompt when a member's plan doesn't cover a download or edit */
+  upgrade?: UpgradeContext;
+}) {
+  const section = resource.lowerThird
+    ? { path: "/lower-thirds", name: "Lower thirds", more: "More lower thirds", browse: "Browse lower thirds" }
+    : { path: "/store", name: "Store", more: "More downloads", browse: "Browse the store" };
   const videoId = resource.previewUrl ? youtubeId(resource.previewUrl) : null;
   // Same category first, then the most downloaded.
   const more = all
-    .filter((r) => r.id !== resource.id)
+    .filter((r) => r.id !== resource.id && (!resource.lowerThird || r.lowerThird))
     .sort((a, b) => Number(b.category === resource.category) - Number(a.category === resource.category) || b.downloads - a.downloads)
     .slice(0, 8);
 
@@ -38,15 +57,15 @@ export function StoreResourceView({ resource, all, now }: { resource: StoreResou
                 <ChevronRightIcon className="size-3.5" />
               </li>
               <li>
-                <Link href="/store" className="text-foreground transition hover:text-brand">
-                  Store
+                <Link href={section.path} className="text-foreground transition hover:text-brand">
+                  {section.name}
                 </Link>
               </li>
               <li aria-hidden="true">
                 <ChevronRightIcon className="size-3.5" />
               </li>
               <li>
-                <Link href={`/store?category=${resource.category}`} className="text-foreground transition hover:text-brand">
+                <Link href={`${section.path}?category=${resource.category}`} className="text-foreground transition hover:text-brand">
                   {categoryName(resource.category)}
                 </Link>
               </li>
@@ -70,7 +89,10 @@ export function StoreResourceView({ resource, all, now }: { resource: StoreResou
                     <p className="text-sm text-muted-foreground">{resource.creator.image ? "Instructor" : "Made by our team"}</p>
                   </div>
                 </div>
-                <DownloadButton resource={resource} />
+                <div className="flex flex-col gap-4 sm:items-end">
+                  <DownloadButton resource={resource} upgrade={upgrade} />
+                  {edits && <RequestEditButton resource={resource} form={edits.form} turnaround={edits.turnaround} upgrade={upgrade} />}
+                </div>
               </div>
 
               <section aria-label="About this download" className="mt-5 rounded-2xl bg-muted/70 p-4 sm:p-5">
@@ -79,7 +101,7 @@ export function StoreResourceView({ resource, all, now }: { resource: StoreResou
                   <span aria-hidden="true">·</span>
                   <span>Added {date.format(new Date(resource.publishedAt))}</span>
                   <span aria-hidden="true">·</span>
-                  <Link href={`/store?category=${resource.category}`} className="text-brand hover:underline">
+                  <Link href={`${section.path}?category=${resource.category}`} className="text-brand hover:underline">
                     {categoryName(resource.category)}
                   </Link>
                   <span
@@ -107,7 +129,7 @@ export function StoreResourceView({ resource, all, now }: { resource: StoreResou
 
             <aside aria-labelledby="more-title" className="min-w-0">
               <h2 id="more-title" className="text-base font-semibold text-foreground">
-                More downloads
+                {section.more}
               </h2>
               {more.length ? (
                 <ul className="mt-4 space-y-4">
@@ -118,10 +140,10 @@ export function StoreResourceView({ resource, all, now }: { resource: StoreResou
                   ))}
                 </ul>
               ) : (
-                <p className="mt-3 text-sm text-muted-foreground">More resources are on the way.</p>
+                <p className="mt-3 text-sm text-muted-foreground">{resource.lowerThird ? "More lower thirds are on the way." : "More resources are on the way."}</p>
               )}
-              <Link href="/store" className="mt-5 inline-flex h-10 w-full items-center justify-center rounded-full border border-border text-sm font-semibold text-foreground transition hover:bg-foreground/5">
-                Browse the store
+              <Link href={section.path} className="mt-5 inline-flex h-10 w-full items-center justify-center rounded-full border border-border text-sm font-semibold text-foreground transition hover:bg-foreground/5">
+                {section.browse}
               </Link>
             </aside>
           </div>
@@ -141,7 +163,7 @@ function MoreCard({ resource, now }: { resource: StoreResource; now: number }) {
       </div>
       <div className="min-w-0">
         <h3 className="line-clamp-2 text-sm leading-snug font-semibold text-foreground">
-          <Link href={`/store/${resource.slug}`} className="outline-none after:absolute after:inset-0 group-hover:text-brand focus-visible:after:rounded-lg focus-visible:after:ring-2 focus-visible:after:ring-brand">
+          <Link href={resourcePath(resource.slug, resource.lowerThird)} className="outline-none after:absolute after:inset-0 group-hover:text-brand focus-visible:after:rounded-lg focus-visible:after:ring-2 focus-visible:after:ring-brand">
             {resource.title}
           </Link>
         </h3>

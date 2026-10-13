@@ -102,7 +102,7 @@ function ProfileEditor({
     <form ref={formRef} onSubmit={submit} noValidate className="space-y-6">
       <div>
         <h1 className="text-[1.75rem] leading-tight font-bold tracking-tight text-foreground">Profile</h1>
-        <p className="mt-1 text-muted-foreground">This is how you appear on challenges, in the community and to your instructors.</p>
+        <p className="mt-1 text-muted-foreground">This is how you appear in the community and to your instructors.</p>
       </div>
 
       <FormMessage state={status} />
@@ -260,6 +260,22 @@ function ProfileEditor({
             value={draft.soundcloud}
             onChange={(e) => set("soundcloud", e.target.value)}
             error={errors.soundcloud}
+          />
+        </div>
+      </AccountCard>
+
+      <AccountCard title="Phone" description="We text you when an edit you asked for is ready. Optional.">
+        <div className="grid gap-5 sm:grid-cols-2">
+          <TextField
+            name="phone"
+            label="Phone number"
+            type="tel"
+            inputMode="tel"
+            autoComplete="tel"
+            placeholder="0712 345 678"
+            value={draft.phone}
+            onChange={(e) => set("phone", e.target.value)}
+            error={errors.phone}
           />
         </div>
       </AccountCard>

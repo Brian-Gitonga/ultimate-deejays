@@ -296,138 +296,6 @@ export type Database = {
           },
         ];
       };
-      challenge_entries: {
-        Row: {
-          id: string;
-          challenge_id: string;
-          user_id: string | null;
-          name: string;
-          email: string;
-          youtube_url: string;
-          youtube_id: string;
-          status: Database["public"]["Enums"]["entry_status"];
-          score: number | null;
-          notes: string;
-          is_demo: boolean;
-          created_at: string;
-          updated_at: string;
-        };
-        Insert: {
-          id?: string;
-          challenge_id: string;
-          user_id?: string | null;
-          name: string;
-          email: string;
-          youtube_url: string;
-          youtube_id: string;
-          status?: Database["public"]["Enums"]["entry_status"];
-          score?: number | null;
-          notes?: string;
-          is_demo?: boolean;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Update: {
-          id?: string;
-          challenge_id?: string;
-          user_id?: string | null;
-          name?: string;
-          email?: string;
-          youtube_url?: string;
-          youtube_id?: string;
-          status?: Database["public"]["Enums"]["entry_status"];
-          score?: number | null;
-          notes?: string;
-          is_demo?: boolean;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Relationships: [
-          {
-            foreignKeyName: "challenge_entries_challenge_id_fkey";
-            columns: ["challenge_id"];
-            isOneToOne: false;
-            referencedRelation: "challenges";
-            referencedColumns: ["id"];
-          },
-          {
-            foreignKeyName: "challenge_entries_user_id_fkey";
-            columns: ["user_id"];
-            isOneToOne: false;
-            referencedRelation: "profiles";
-            referencedColumns: ["id"];
-          },
-        ];
-      };
-      challenges: {
-        Row: {
-          id: string;
-          slug: string;
-          title: string;
-          tagline: string;
-          type: Database["public"]["Enums"]["challenge_type"];
-          difficulty: string;
-          opens: string;
-          closes: string;
-          image: string;
-          prize: string;
-          brief: string;
-          rules: string[];
-          judging: Json;
-          inspiration: Json;
-          winners: Json | null;
-          published: boolean;
-          entry_count: number;
-          sample_entries: number;
-          created_at: string;
-          updated_at: string;
-        };
-        Insert: {
-          id?: string;
-          slug: string;
-          title?: string;
-          tagline?: string;
-          type?: Database["public"]["Enums"]["challenge_type"];
-          difficulty?: string;
-          opens?: string;
-          closes?: string;
-          image?: string;
-          prize?: string;
-          brief?: string;
-          rules?: string[];
-          judging?: Json;
-          inspiration?: Json;
-          winners?: Json | null;
-          published?: boolean;
-          entry_count?: number;
-          sample_entries?: number;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Update: {
-          id?: string;
-          slug?: string;
-          title?: string;
-          tagline?: string;
-          type?: Database["public"]["Enums"]["challenge_type"];
-          difficulty?: string;
-          opens?: string;
-          closes?: string;
-          image?: string;
-          prize?: string;
-          brief?: string;
-          rules?: string[];
-          judging?: Json;
-          inspiration?: Json;
-          winners?: Json | null;
-          published?: boolean;
-          entry_count?: number;
-          sample_entries?: number;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Relationships: [];
-      };
       checkouts: {
         Row: {
           id: string;
@@ -540,6 +408,7 @@ export type Database = {
           starts_at: string | null;
           expires_at: string | null;
           active: boolean;
+          emails: string[];
           created_at: string;
           updated_at: string;
         };
@@ -556,6 +425,7 @@ export type Database = {
           starts_at?: string | null;
           expires_at?: string | null;
           active?: boolean;
+          emails?: string[];
           created_at?: string;
           updated_at?: string;
         };
@@ -572,6 +442,7 @@ export type Database = {
           starts_at?: string | null;
           expires_at?: string | null;
           active?: boolean;
+          emails?: string[];
           created_at?: string;
           updated_at?: string;
         };
@@ -826,6 +697,116 @@ export type Database = {
             columns: ["instructor_id"];
             isOneToOne: false;
             referencedRelation: "instructors";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      edit_request_messages: {
+        Row: {
+          id: string;
+          request_id: string;
+          author: string;
+          body: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          request_id: string;
+          author: string;
+          body: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          request_id?: string;
+          author?: string;
+          body?: string;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "edit_request_messages_request_id_fkey";
+            columns: ["request_id"];
+            isOneToOne: false;
+            referencedRelation: "edit_requests";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      edit_requests: {
+        Row: {
+          id: string;
+          number: number;
+          user_id: string;
+          resource_id: string | null;
+          resource_slug: string;
+          resource_title: string;
+          answers: Json;
+          notes: string;
+          phone: string;
+          text_me: boolean;
+          status: string;
+          admin_notes: string;
+          files: Json;
+          delivered_at: string | null;
+          seen_at: string | null;
+          is_demo: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          number?: number;
+          user_id: string;
+          resource_id?: string | null;
+          resource_slug?: string;
+          resource_title?: string;
+          answers?: Json;
+          notes?: string;
+          phone?: string;
+          text_me?: boolean;
+          status?: string;
+          admin_notes?: string;
+          files?: Json;
+          delivered_at?: string | null;
+          seen_at?: string | null;
+          is_demo?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          number?: number;
+          user_id?: string;
+          resource_id?: string | null;
+          resource_slug?: string;
+          resource_title?: string;
+          answers?: Json;
+          notes?: string;
+          phone?: string;
+          text_me?: boolean;
+          status?: string;
+          admin_notes?: string;
+          files?: Json;
+          delivered_at?: string | null;
+          seen_at?: string | null;
+          is_demo?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "edit_requests_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "edit_requests_resource_id_fkey";
+            columns: ["resource_id"];
+            isOneToOne: false;
+            referencedRelation: "store_resources";
             referencedColumns: ["id"];
           },
         ];
@@ -1267,6 +1248,33 @@ export type Database = {
           },
         ];
       };
+      plan_allowances: {
+        Row: {
+          plan: Database["public"]["Enums"]["plan_tier"];
+          downloads: number | null;
+          edits: number | null;
+          open_edits: number | null;
+          period: string;
+          updated_at: string;
+        };
+        Insert: {
+          plan: Database["public"]["Enums"]["plan_tier"];
+          downloads?: number | null;
+          edits?: number | null;
+          open_edits?: number | null;
+          period?: string;
+          updated_at?: string;
+        };
+        Update: {
+          plan?: Database["public"]["Enums"]["plan_tier"];
+          downloads?: number | null;
+          edits?: number | null;
+          open_edits?: number | null;
+          period?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       profiles: {
         Row: {
           id: string;
@@ -1289,6 +1297,7 @@ export type Database = {
           referred_by: string | null;
           referred_at: string | null;
           email_prefs: Json;
+          phone: string;
         };
         Insert: {
           id: string;
@@ -1311,6 +1320,7 @@ export type Database = {
           referred_by?: string | null;
           referred_at?: string | null;
           email_prefs?: Json;
+          phone?: string;
         };
         Update: {
           id?: string;
@@ -1333,6 +1343,7 @@ export type Database = {
           referred_by?: string | null;
           referred_at?: string | null;
           email_prefs?: Json;
+          phone?: string;
         };
         Relationships: [
           {
@@ -1510,6 +1521,10 @@ export type Database = {
           instructor_id: string | null;
           status: string;
           featured: boolean;
+          lower_third: boolean;
+          edits_enabled: boolean;
+          edit_form: Json;
+          edit_turnaround: string;
           download_count: number;
           is_demo: boolean;
           published_at: string | null;
@@ -1525,6 +1540,10 @@ export type Database = {
           thumbnail?: string;
           preview_url?: string;
           access_plan?: Database["public"]["Enums"]["plan_tier"];
+          lower_third?: boolean;
+          edits_enabled?: boolean;
+          edit_form?: Json;
+          edit_turnaround?: string;
           instructor_id?: string | null;
           status?: string;
           featured?: boolean;
@@ -1543,6 +1562,10 @@ export type Database = {
           thumbnail?: string;
           preview_url?: string;
           access_plan?: Database["public"]["Enums"]["plan_tier"];
+          lower_third?: boolean;
+          edits_enabled?: boolean;
+          edit_form?: Json;
+          edit_turnaround?: string;
           instructor_id?: string | null;
           status?: string;
           featured?: boolean;
@@ -1639,7 +1662,6 @@ export type Database = {
           last_seen_at: string | null;
           updated_at: string | null;
           referred_by: string | null;
-          challenge_entries: number | null;
           mixes_submitted: number | null;
           paid: number | null;
         };
@@ -1647,9 +1669,9 @@ export type Database = {
       };
     };
     Functions: {
+      allowance_period_start: { Args: { period: string }; Returns: string };
       attach_referral: { Args: { ref_code: string }; Returns: boolean };
-      can_enter_challenge: { Args: { target: string }; Returns: boolean };
-      challenge_is_open: { Args: { target: string }; Returns: boolean };
+      cancel_edit_request: { Args: { request: string }; Returns: boolean };
       fulfill_checkout: { Args: { checkout_reference: string; paid_amount: number; paid_fee: number; paid_method: Database["public"]["Enums"]["payment_method"]; paid_source: string; paid_country: string; paid_at: string }; Returns: string };
       generate_affiliate_code: { Args: { base: string }; Returns: string };
       is_admin: { Args: never; Returns: boolean };
@@ -1662,7 +1684,21 @@ export type Database = {
       my_affiliate_signups: { Args: never; Returns: { created_at: string }[] };
       refresh_course_counts: { Args: { target: string }; Returns: undefined };
       save_course: { Args: { payload: Json }; Returns: string };
+      mark_edit_seen: { Args: { request: string }; Returns: undefined };
+      my_allowance: { Args: never; Returns: Json };
+      my_downloads: { Args: { max_rows?: number }; Returns: { resource_id: string; last_at: string }[] };
+      reply_edit_request: { Args: { request: string; body: string }; Returns: boolean };
+      request_edit: { Args: { resource_slug: string; answers: Json; notes?: string; phone?: string; text_me?: boolean }; Returns: Json };
       store_download: { Args: { resource_slug: string; file_ids?: string[] }; Returns: Json };
+      studio_edit_requests: {
+        Args: { target?: string };
+        Returns: {
+          id: string; number: number; user_id: string; member_name: string; member_email: string; member_plan: Database["public"]["Enums"]["plan_tier"];
+          resource_id: string | null; resource_slug: string; resource_title: string; resource_thumbnail: string; resource_lower_third: boolean;
+          answers: Json; notes: string; phone: string; text_me: boolean; status: string; admin_notes: string; files: Json;
+          delivered_at: string | null; seen_at: string | null; is_demo: boolean; created_at: string; updated_at: string;
+        }[];
+      };
       studio_lesson_media: { Args: { target?: string }; Returns: { course_id: string; id: string; youtube: string; resources: Json }[] };
       studio_store_files: { Args: { target?: string }; Returns: { id: string; resource_id: string; name: string; kind: string; path: string; url: string; size_bytes: number; mime_type: string; position: number }[] };
       touch_last_seen: { Args: never; Returns: undefined };
@@ -1671,10 +1707,8 @@ export type Database = {
     Enums: {
       affiliate_status: "pending" | "approved" | "paused" | "rejected";
       app_role: "user" | "admin";
-      challenge_type: "scratch" | "mixing" | "transitions" | "genre";
       course_status: "draft" | "review" | "published";
       dj_experience: "new" | "bedroom" | "gigging" | "pro";
-      entry_status: "submitted" | "shortlisted" | "winner" | "disqualified";
       payment_method: "card" | "paypal" | "mobile_money" | "bank_transfer" | "free";
       payment_status: "paid" | "refunded";
       plan_tier: "warm-up" | "resident" | "headliner";

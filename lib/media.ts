@@ -4,7 +4,6 @@ export const mediaFolders = [
   { slug: "general", name: "General" },
   { slug: "courses", name: "Course images" },
   { slug: "blog", name: "Blog covers" },
-  { slug: "challenges", name: "Challenge images" },
   { slug: "instructors", name: "Instructor photos" },
   { slug: "resources", name: "Lesson resources" },
   { slug: "store", name: "Store thumbnails" },

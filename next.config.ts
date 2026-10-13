@@ -4,6 +4,14 @@ import type { NextConfig } from "next";
 const supabaseHost = process.env.NEXT_PUBLIC_SUPABASE_URL ? new URL(process.env.NEXT_PUBLIC_SUPABASE_URL) : null;
 
 const nextConfig: NextConfig = {
+  // Challenges were replaced by lower thirds: old links (search results, affiliate links) land there.
+  async redirects() {
+    return [
+      { source: "/challenges", destination: "/lower-thirds", permanent: true },
+      { source: "/challenges/:slug", destination: "/lower-thirds", permanent: true },
+      { source: "/studio/challenges/:path*", destination: "/studio/store", permanent: false },
+    ];
+  },
   experimental: {
     // Studio → Media library accepts files up to 10 MB (plus form overhead).
     serverActions: { bodySizeLimit: "11mb" },

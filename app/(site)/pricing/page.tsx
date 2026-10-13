@@ -4,6 +4,8 @@ import type { ReactNode } from "react";
 import { FaqAccordion, type FaqItem } from "@/components/faq-accordion";
 import { CheckIcon, CloseIcon, HeadphonesIcon, SparklesIcon, TrophyIcon } from "@/components/icons";
 import { PageHeader } from "@/components/page-header";
+import { allowanceHighlights, allowanceLabel, type PlanAllowance } from "@/lib/allowances";
+import { getPlanAllowances } from "@/lib/db/allowances";
 import { getSiteSettings } from "@/lib/db/settings";
 import { currencyName, currencySymbol, moneyFormatter } from "@/lib/money";
 import { comparison, plans as basePlans, type Plan } from "@/lib/plans";
@@ -40,6 +42,11 @@ const faqsFor = ({ upgradeExample, guaranteeDays }: { upgradeExample: string | n
       : "Contact us and we'll help you find the right plan before you buy.",
   },
   {
+    question: "What's a template edit?",
+    answer:
+      "No After Effects or Premiere? Open a template with a Request an edit button, tell us your name, socials and colours, and our team sends the finished files to your account (and texts you when they're ready). Each plan includes a number of edits, shown in the table above.",
+  },
+  {
     question: "Do you have discount codes?",
     answer:
       "Sometimes. If a DJ or creator sent you here, their code is applied for you at checkout. You can also type a promo code on the checkout page before you pay.",
@@ -52,8 +59,8 @@ const faqsFor = ({ upgradeExample, guaranteeDays }: { upgradeExample: string | n
 ];
 
 export default async function PricingPage() {
-  // Plans, copy and currency come from Studio → Settings → Pricing.
-  const settings = await getSiteSettings();
+  // Plans, copy, currency and allowances come from Studio → Settings → Pricing.
+  const [settings, allowances] = await Promise.all([getSiteSettings(), getPlanAllowances()]);
   const plans: Plan[] = settings.plans.map((saved) => ({ ...basePlans.find((p) => p.slug === saved.slug)!, ...saved }));
   const currency = settings.general.currency;
   const price = moneyFormatter(currency);
@@ -66,6 +73,21 @@ export default async function PricingPage() {
         ? `moving from ${resident.name} to ${headliner.name} costs ${price(headliner.price - resident.price)}`
         : null,
   });
+  // Downloads and edits per plan, from the same table the site enforces them with (none before migration 016).
+  const allowanceOf = (slug: Plan["slug"]) => allowances.find((a) => a.plan === slug);
+  const cell = (a: PlanAllowance | undefined, key: "downloads" | "edits") => (!a ? false : a[key] === 0 ? false : allowanceLabel(a[key], a.period));
+  const groups = allowances.length
+    ? [
+        ...comparison,
+        {
+          group: "Store & edits",
+          rows: [
+            { label: "Store downloads", values: plans.map((p) => cell(allowanceOf(p.slug), "downloads")) as [string | boolean, string | boolean, string | boolean] },
+            { label: "Template edits by our team", values: plans.map((p) => cell(allowanceOf(p.slug), "edits")) as [string | boolean, string | boolean, string | boolean] },
+          ],
+        },
+      ]
+    : comparison;
   const offers = {
     "@context": "https://schema.org",
     "@type": "Product",
@@ -101,7 +123,8 @@ export default async function PricingPage() {
         <ul className="mt-12 grid items-stretch gap-6 lg:grid-cols-3">
           {plans.map((plan) => (
             <li key={plan.slug}>
-              <PlanCard plan={plan} currency={currency} />
+              {/* The plan's downloads and edits come from Studio → Settings, after the hand-written lines. */}
+              <PlanCard plan={{ ...plan, highlights: [...plan.highlights, ...allowanceHighlights(allowanceOf(plan.slug))] }} currency={currency} />
             </li>
           ))}
         </ul>
@@ -141,7 +164,7 @@ export default async function PricingPage() {
                   ))}
                 </tr>
               </thead>
-              {comparison.map((group) => (
+              {groups.map((group) => (
                 <tbody key={group.group}>
                   <tr>
                     <th colSpan={4} scope="colgroup" className="bg-muted/60 px-4 py-2.5 text-xs font-semibold tracking-wide text-muted-foreground uppercase sm:px-5">

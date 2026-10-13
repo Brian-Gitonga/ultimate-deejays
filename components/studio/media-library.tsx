@@ -204,7 +204,7 @@ export function MediaLibrary({ seed }: { seed: MediaAsset[] }) {
           body={
             <>
               <span className="font-medium text-foreground">{confirm.name}</span> will be deleted from storage. Anything still using its link (a course, post or
-              challenge image) will show a broken image.
+              store thumbnail) will show a broken image.
             </>
           }
           confirmLabel="Delete file"

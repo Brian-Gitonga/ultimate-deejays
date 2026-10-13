@@ -38,7 +38,7 @@ export type Dashboard = {
   enrollments: DashboardEnrollment[];
   payouts: Payout[];
   reviews: DashboardReview[];
-  todos: { key: "mixes" | "entries" | "affiliates" | "reviews"; label: string; count: number; href: string }[];
+  todos: { key: "mixes" | "edits" | "affiliates" | "reviews"; label: string; count: number; href: string }[];
 };
 
 export async function getDashboard(): Promise<Dashboard> {
@@ -51,7 +51,7 @@ export async function getDashboard(): Promise<Dashboard> {
   const d60 = iso(now.getTime() - 60 * DAY);
   const count = (q: PromiseLike<{ count: number | null }>) => Promise.resolve(q).then((r) => r.count ?? 0);
 
-  const [payments, payouts, courses, enrollments, reviews, students, students30, studentsPrev, enroll30, enrollPrev, mixes, entries, affiliates, unanswered] =
+  const [payments, payouts, courses, enrollments, reviews, students, students30, studentsPrev, enroll30, enrollPrev, mixes, edits, affiliates, unanswered] =
     await Promise.all([
       supabase.from("payments").select("amount, fee, commission, status, paid_at"),
       supabase.from("payouts").select("*").order("created_at", { ascending: false }),
@@ -73,7 +73,8 @@ export async function getDashboard(): Promise<Dashboard> {
       count(supabase.from("enrollments").select("user_id", { count: "exact", head: true }).gte("enrolled_at", d30)),
       count(supabase.from("enrollments").select("user_id", { count: "exact", head: true }).gte("enrolled_at", d60).lt("enrolled_at", d30)),
       count(supabase.from("mix_submissions").select("id", { count: "exact", head: true }).eq("status", "pending")),
-      count(supabase.from("challenge_entries").select("id", { count: "exact", head: true }).eq("status", "submitted")),
+      // 0 until migration 016 adds edit requests.
+      count(supabase.from("edit_requests").select("id", { count: "exact", head: true }).eq("status", "submitted")),
       count(supabase.from("affiliate_applications").select("user_id", { count: "exact", head: true }).eq("status", "pending")),
       count(supabase.from("course_reviews").select("id", { count: "exact", head: true }).eq("status", "published").eq("reply", "")),
     ]);
@@ -140,7 +141,7 @@ export async function getDashboard(): Promise<Dashboard> {
     })),
     todos: [
       { key: "mixes", label: "Mixes awaiting your feedback", count: mixes, href: "/studio/feedback" },
-      { key: "entries", label: "Challenge entries to judge", count: entries, href: "/studio/challenges" },
+      { key: "edits", label: "Edit requests to start", count: edits, href: "/studio/edits" },
       { key: "affiliates", label: "Affiliate applications to review", count: affiliates, href: "/studio/affiliates" },
       { key: "reviews", label: "Reviews without a reply", count: unanswered, href: "/studio/reviews" },
     ],

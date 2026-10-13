@@ -12,7 +12,6 @@
 -- 4. Course ratings and review counts go to 0. Reviews come only from real
 --    students (Account → course page); until then a course shows "New"
 --    instead of a made-up star rating.
--- 5. Challenge entry counts go to 0 (real entries count themselves).
 --
 -- Edit the numbers below to match reality before you run it. The
 -- placeholders are yours to change: nothing else on the site depends on them.
@@ -59,8 +58,6 @@ where c.slug = v.slug;
 
 -- Any other course (added later) also starts without made-up ratings.
 update public.courses set sample_rating = 0, sample_reviews = 0 where sample_rating > 0 or sample_reviews > 0;
-
-update public.challenges set sample_entries = 0 where sample_entries > 0;
 
 -- What the site shows now.
 select slug, access_plan as plan, sample_students + enrolled_count as students, sample_reviews + review_count as reviews

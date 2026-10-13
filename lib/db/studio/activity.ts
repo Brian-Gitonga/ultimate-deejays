@@ -3,13 +3,13 @@ import { createClient } from "@/lib/supabase/server";
 
 /*
  * Studio → Notifications: everything that happened (sign-ups, affiliate
- * applications, payments, refunds, entries, reviews, mixes), from the
+ * applications, payments, refunds, reviews, mixes, edit requests), from the
  * admin_activity view, plus how many are new since this admin last looked.
  */
 
 type Supabase = Awaited<ReturnType<typeof createClient>>;
 
-export type ActivityKind = "student" | "affiliate" | "payment" | "refund" | "entry" | "review" | "mix";
+export type ActivityKind = "student" | "affiliate" | "payment" | "refund" | "review" | "mix" | "edit";
 
 export type Activity = {
   id: string;

@@ -17,7 +17,7 @@ export function HeaderAuth() {
 
   if (signedIn) {
     return (
-      <Link href="/account/profile" className={`${primary} hidden sm:inline-flex`}>
+      <Link href="/account" className={`${primary} hidden sm:inline-flex`}>
         <UserIcon className="size-4" />
         My account
       </Link>

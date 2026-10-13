@@ -21,7 +21,6 @@ export type Student = {
   joinedAt: string;
   lastActiveAt: string;
   enrollments: Enrollment[];
-  challengeEntries: number;
   mixesSubmitted: number;
   /** Total paid, USD */
   paid: number;

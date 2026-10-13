@@ -1,7 +1,8 @@
 import "server-only";
+import { resourcePath } from "@/lib/store";
 import { createClient } from "@/lib/supabase/server";
 
-/* Studio search: one box that finds courses, posts, challenges, students, instructors, payments and affiliates. */
+/* Studio search: one box that finds courses, posts, store resources, students, instructors, payments and affiliates. */
 
 export type SearchHit = { id: string; title: string; detail: string; href: string };
 export type SearchGroup = { key: string; label: string; hits: SearchHit[] };
@@ -17,10 +18,10 @@ export async function searchStudio(query: string): Promise<SearchGroup[]> {
   const supabase = await createClient();
   const LIMIT = 8;
 
-  const [courses, posts, challenges, students, instructors, payments, affiliates] = await Promise.all([
+  const [courses, posts, resources, students, instructors, payments, affiliates] = await Promise.all([
     supabase.from("courses").select("id, title, slug, status").or(any("title", "slug", "subtitle")).limit(LIMIT),
     supabase.from("blog_posts").select("id, title, slug, status").or(any("title", "slug", "excerpt")).limit(LIMIT),
-    supabase.from("challenges").select("id, title, slug, published").or(any("title", "slug", "tagline")).limit(LIMIT),
+    supabase.from("store_resources").select("id, title, slug, status, lower_third").or(any("title", "slug", "description")).limit(LIMIT),
     supabase.from("profiles").select("id, full_name, dj_name, email, plan").eq("role", "user").or(any("full_name", "dj_name", "email")).limit(LIMIT),
     supabase.from("instructors").select("id, name, specialty").or(any("name", "specialty")).limit(LIMIT),
     supabase.from("payments").select("id, reference, customer_name, customer_email, amount, currency, status").or(any("reference", "customer_name", "customer_email")).limit(LIMIT),
@@ -39,9 +40,9 @@ export async function searchStudio(query: string): Promise<SearchGroup[]> {
       hits: (posts.data ?? []).map((p) => ({ id: p.id, title: p.title || "Untitled post", detail: `${p.status} · /blog/${p.slug}`, href: `/studio/blog/${p.id}/edit` })),
     },
     {
-      key: "challenges",
-      label: "Challenges",
-      hits: (challenges.data ?? []).map((c) => ({ id: c.id, title: c.title, detail: c.published ? "Published" : "Draft", href: `/studio/challenges/${c.id}/edit` })),
+      key: "store",
+      label: "Store & lower thirds",
+      hits: (resources.data ?? []).map((r) => ({ id: r.id, title: r.title, detail: `${r.status} · ${resourcePath(r.slug, r.lower_third)}`, href: "/studio/store" })),
     },
     {
       key: "students",

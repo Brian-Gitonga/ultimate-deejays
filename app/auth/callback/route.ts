@@ -1,6 +1,6 @@
 import type { EmailOtpType } from "@supabase/supabase-js";
 import { NextResponse, type NextRequest } from "next/server";
-import { safeNextPath } from "@/lib/auth";
+import { HOME_AFTER_AUTH, safeNextPath } from "@/lib/auth";
 import { attachReferral } from "@/lib/referrals.server";
 import { createClient } from "@/lib/supabase/server";
 
@@ -49,6 +49,6 @@ export async function GET(request: NextRequest) {
   // Expired or already-used link, or opened in a different browser. The login page explains.
   const login = new URL("/login", origin);
   login.searchParams.set("error", "link");
-  if (destination !== "/account/profile") login.searchParams.set("next", destination);
+  if (destination !== HOME_AFTER_AUTH) login.searchParams.set("next", destination);
   return NextResponse.redirect(login);
 }

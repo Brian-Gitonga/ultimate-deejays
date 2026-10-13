@@ -134,6 +134,6 @@ export const linkDestinations = [
   { path: "/", label: "Home page" },
   { path: "/pricing", label: "Pricing" },
   { path: "/courses", label: "All courses" },
-  { path: "/challenges", label: "Challenges" },
+  { path: "/lower-thirds", label: "Lower thirds" },
   { path: "/blog", label: "Blog" },
 ];

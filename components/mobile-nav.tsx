@@ -84,7 +84,7 @@ export function MobileNav({ links }: { links: NavLink[] }) {
           {signedIn ? (
             <div className="mt-2 border-t border-border p-1 pt-3">
               <Link
-                href="/account/profile"
+                href="/account"
                 onClick={close}
                 className="inline-flex h-12 w-full items-center justify-center rounded-full bg-foreground text-base font-semibold text-background hover:bg-foreground/90"
               >

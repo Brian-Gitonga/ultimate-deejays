@@ -8,9 +8,9 @@ import {
   LessonIcon,
   MessageIcon,
   PlusIcon,
+  SlidersIcon,
   StarIcon,
   TrendUpIcon,
-  TrophyIcon,
   UsersIcon,
   WalletIcon,
 } from "@/components/icons";
@@ -30,7 +30,7 @@ const shortDate = new Intl.DateTimeFormat("en-US", { month: "short", day: "numer
 
 const todoIcons: Record<Dashboard["todos"][number]["key"], ComponentType<SVGProps<SVGSVGElement>>> = {
   mixes: MessageIcon,
-  entries: TrophyIcon,
+  edits: SlidersIcon,
   affiliates: HandshakeIcon,
   reviews: StarIcon,
 };

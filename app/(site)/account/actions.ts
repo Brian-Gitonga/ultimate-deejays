@@ -107,7 +107,7 @@ export async function setNewPassword(_prev: AuthFormState, formData: FormData): 
   redirect("/account/profile");
 }
 
-const prefsSchema = z.object({ "new-courses": z.boolean(), challenges: z.boolean(), feedback: z.boolean(), newsletter: z.boolean() });
+const prefsSchema = z.object({ "new-courses": z.boolean(), feedback: z.boolean(), newsletter: z.boolean() });
 export type EmailPrefs = z.infer<typeof prefsSchema>;
 
 /** Settings → Email notifications. The newsletter switch also joins or leaves the subscriber list. */

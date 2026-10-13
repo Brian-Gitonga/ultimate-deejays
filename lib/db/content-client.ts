@@ -4,18 +4,17 @@ import { supabaseEnv } from "@/lib/env";
 import type { Database } from "@/lib/supabase/database.types";
 
 /*
- * Reads public content (courses, blog, challenges, instructors, settings,
+ * Reads public content (courses, blog, instructors, settings,
  * reviews, the store) for the site as an anonymous visitor, so only published rows come
  * back. Responses are cached by Next.js and tagged; the studio's Server
  * Actions expire a tag the moment you save (updateTag), and everything
  * refreshes on its own every 5 minutes, which is what makes scheduled posts
- * and challenge dates go live without a deploy.
+ * go live without a deploy.
  */
 
 export const CONTENT_TAGS = {
   courses: "courses",
   posts: "posts",
-  challenges: "challenges",
   instructors: "instructors",
   settings: "settings",
   reviews: "reviews",

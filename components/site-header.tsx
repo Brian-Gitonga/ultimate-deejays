@@ -9,7 +9,7 @@ export type NavLink = { label: string; href: string };
 
 const navLinks: NavLink[] = [
   { label: "Courses", href: "/courses" },
-  { label: "Challenges", href: "/challenges" },
+  { label: "Lower Thirds", href: "/lower-thirds" },
   { label: "Pricing", href: "/pricing" },
   { label: "Store", href: "/store" },
   { label: "About", href: "/about" },

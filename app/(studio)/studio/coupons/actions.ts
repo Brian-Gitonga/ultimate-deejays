@@ -15,6 +15,7 @@ const schema = z
     discountType: z.enum(["percent", "fixed"]),
     discountValue: z.number().positive("Enter a discount above 0."),
     plans: z.array(z.enum(["resident", "headliner"])),
+    emails: z.array(z.email("One of the emails doesn't look right. Check the list.")).max(200, "Up to 200 emails per code."),
     maxRedemptions: z.number().int().positive("Use a limit of at least 1, or leave it empty.").nullable(),
     oncePerCustomer: z.boolean(),
     startsOn: day,
@@ -36,17 +37,24 @@ export async function saveCoupon(coupon: Coupon): Promise<ActionResult<Coupon>> 
       discount_type: c.discountType,
       discount_value: Math.round(c.discountValue * 100) / 100,
       plans: c.plans,
+      emails: c.emails.map((e) => e.toLowerCase()),
       max_redemptions: c.maxRedemptions,
       once_per_customer: c.oncePerCustomer,
       starts_at: c.startsOn ? `${c.startsOn}T00:00:00Z` : null,
       expires_at: c.endsOn ? `${c.endsOn}T23:59:59Z` : null,
       active: c.active,
     };
-    const query = isUuid(coupon.id) ? supabase.from("coupons").update(values).eq("id", coupon.id) : supabase.from("coupons").insert(values);
-    const { data, error } = await query.select("*").single();
+    const write = (row: Omit<typeof values, "emails"> & { emails?: string[] }) =>
+      (isUuid(coupon.id) ? supabase.from("coupons").update(row).eq("id", coupon.id) : supabase.from("coupons").insert(row)).select("*").single();
+    let { data, error } = await write(values);
+    // Before migration 016 there's no emails column: save the rest.
+    if (error?.code === "42703" || error?.code === "PGRST204") {
+      if (c.emails.length) throw new StudioError("Limiting a code to certain people needs migration 016. Run it, then save again.");
+      ({ data, error } = await write({ ...values, emails: undefined }));
+    }
     if (error?.code === "23505") throw new StudioError(`The code ${c.code} is already taken by another coupon or an affiliate.`);
     if (error) throw error;
-    return toCoupon(data, { revenue: coupon.revenue, discounted: coupon.discounted });
+    return toCoupon(data!, { revenue: coupon.revenue, discounted: coupon.discounted });
   });
 }
 

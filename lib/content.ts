@@ -4,7 +4,7 @@ import type { PostCategory } from "./post-categories";
 
 /*
  * The shapes the public site renders. The content itself lives in the
- * database (courses, blog_posts, challenges, instructors) and is read through
+ * database (courses, blog_posts, instructors) and is read through
  * lib/db; the studio edits it. supabase/migrations/…_seed_content.sql holds
  * the original sample content.
  */

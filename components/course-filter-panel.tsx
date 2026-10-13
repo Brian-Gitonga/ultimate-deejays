@@ -1,24 +1,28 @@
 "use client";
 
-import { useEffect, useRef, type FormEvent, type KeyboardEvent, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { activeFilterCount, type CourseFilters } from "@/lib/course-filters";
 import { courseCategories, courseDurations, courseLevels, type CourseCategory } from "@/lib/course-taxonomy";
 import type { FacetCounts } from "@/lib/courses";
 import { CatalogLink, scrollToResults, useCatalog } from "./course-catalog";
-import { CloseIcon, SearchIcon } from "./icons";
+import { ChevronDownIcon, ChevronLeftIcon, CloseIcon, FilterIcon } from "./icons";
 
 type Facets = { categories: FacetCounts; levels: FacetCounts; durations: FacetCounts };
 
+export const FILTERS_BUTTON_ID = "course-filters-button";
+
 /*
- * The filter sidebar. On large screens it's a sticky panel beside the results;
- * below that it becomes a slide-in drawer opened by the "Filters" button. It's
- * one element either way, so each filter link exists exactly once in the page.
+ * The filter sidebar, drawn like the one on /store. On large screens it's a
+ * sticky panel beside the results that the arrow folds away; below that it
+ * becomes a slide-in drawer opened by the "Filters" button. It's one element
+ * either way, so each filter link exists exactly once in the page.
  */
 export function CourseFilterPanel({ facets }: { facets: Facets }) {
-  const { filters, total, isPending, drawerOpen, setDrawerOpen, navigate } = useCatalog();
+  const { filters, total, isPending, drawerOpen, setDrawerOpen, collapsed, setCollapsed, navigate } = useCatalog();
   const panelRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
   const activeCount = activeFilterCount(filters);
+  const clearAll = () => navigate({ query: "", category: null, level: null, duration: null });
 
   useEffect(() => {
     if (!drawerOpen) return;
@@ -44,7 +48,7 @@ export function CourseFilterPanel({ facets }: { facets: Facets }) {
   // Keep keyboard focus inside the open drawer.
   function trapFocus(event: KeyboardEvent<HTMLDivElement>) {
     if (!drawerOpen || event.key !== "Tab" || !panelRef.current) return;
-    const focusable = panelRef.current.querySelectorAll<HTMLElement>("a[href], button:not([disabled]), input");
+    const focusable = [...panelRef.current.querySelectorAll<HTMLElement>("a[href], button:not([disabled]), input")].filter((el) => el.offsetParent !== null);
     const first = focusable[0];
     const last = focusable[focusable.length - 1];
     if (event.shiftKey && document.activeElement === first) {
@@ -56,19 +60,23 @@ export function CourseFilterPanel({ facets }: { facets: Facets }) {
     }
   }
 
+  function collapse() {
+    setCollapsed(true);
+    // The fold button goes with the sidebar, so focus moves to the button that brings it back.
+    requestAnimationFrame(() => document.getElementById(FILTERS_BUTTON_ID)?.focus());
+  }
+
   function showResults() {
     setDrawerOpen(false);
     scrollToResults();
   }
 
   return (
-    <aside aria-label="Course filters" className="min-w-0 lg:sticky lg:top-28">
+    <aside aria-label="Course filters" className={`min-w-0 lg:sticky lg:top-28 ${collapsed ? "lg:hidden" : ""}`}>
       <div
         aria-hidden="true"
         onClick={() => setDrawerOpen(false)}
-        className={`fixed inset-0 z-[70] bg-neutral-950/40 backdrop-blur-[0.125rem] transition-opacity duration-300 lg:hidden ${
-          drawerOpen ? "opacity-100" : "pointer-events-none opacity-0"
-        }`}
+        className={`fixed inset-0 z-[70] bg-neutral-950/40 transition-opacity duration-300 lg:hidden ${drawerOpen ? "opacity-100" : "pointer-events-none opacity-0"}`}
       />
 
       <div
@@ -76,33 +84,46 @@ export function CourseFilterPanel({ facets }: { facets: Facets }) {
         id="course-filters"
         role={drawerOpen ? "dialog" : undefined}
         aria-modal={drawerOpen || undefined}
-        aria-labelledby={drawerOpen ? "filters-title" : undefined}
+        aria-labelledby="filters-title"
         onKeyDown={trapFocus}
-        className={`max-lg:fixed max-lg:inset-y-0 max-lg:left-0 max-lg:z-[80] max-lg:flex max-lg:w-[min(22rem,88vw)] max-lg:flex-col max-lg:bg-background max-lg:shadow-2xl max-lg:duration-300 max-lg:ease-[cubic-bezier(0.22,1,0.36,1)] lg:max-h-[calc(100dvh-8rem)] lg:overflow-y-auto lg:overscroll-contain lg:rounded-2xl lg:border lg:border-black/[0.06] lg:bg-card lg:shadow-[0_8px_30px_-6px_rgb(0_0_0/0.08)] lg:[scrollbar-width:thin] dark:lg:border-white/10 ${
+        className={`max-lg:fixed max-lg:inset-y-0 max-lg:left-0 max-lg:z-[80] max-lg:flex max-lg:w-[min(22rem,88vw)] max-lg:flex-col max-lg:bg-background max-lg:shadow-2xl max-lg:duration-300 max-lg:ease-[cubic-bezier(0.22,1,0.36,1)] lg:max-h-[calc(100dvh-8rem)] lg:overflow-y-auto lg:overscroll-contain lg:rounded-xl lg:border lg:border-border lg:bg-card lg:[scrollbar-width:thin] ${
           // Visible at once when opening (so focus can move in), hidden only after the slide-out ends.
-          drawerOpen
-            ? "max-lg:transition-[translate]"
-            : "max-lg:invisible max-lg:-translate-x-full max-lg:transition-[translate,visibility]"
+          drawerOpen ? "max-lg:transition-[translate]" : "max-lg:invisible max-lg:-translate-x-full max-lg:transition-[translate,visibility]"
         }`}
       >
-        <div className="flex items-center justify-between border-b border-border px-5 py-4 lg:hidden">
-          <h2 id="filters-title" className="text-lg font-semibold text-foreground">
+        <div className="flex items-center gap-3 border-b border-border px-5 py-4">
+          <span aria-hidden="true" className="flex size-8 items-center justify-center rounded-lg bg-foreground/[0.06] text-foreground">
+            <FilterIcon className="size-4" />
+          </span>
+          <h2 id="filters-title" className="flex-1 text-base font-semibold text-foreground">
             Filters
           </h2>
+          {activeCount > 0 && (
+            <button type="button" onClick={clearAll} className="text-sm font-medium text-brand hover:underline max-lg:hidden">
+              Clear all
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={collapse}
+            aria-label="Hide filters"
+            title="Hide filters"
+            className="hidden size-8 items-center justify-center rounded-lg text-foreground hover:bg-foreground/[0.06] lg:flex"
+          >
+            <ChevronLeftIcon className="size-[1.125rem]" />
+          </button>
           <button
             ref={closeRef}
             type="button"
             onClick={() => setDrawerOpen(false)}
             aria-label="Close filters"
-            className="flex size-9 items-center justify-center rounded-lg text-foreground hover:bg-foreground/5"
+            className="flex size-9 items-center justify-center rounded-lg text-foreground hover:bg-foreground/5 lg:hidden"
           >
             <CloseIcon className="size-5" />
           </button>
         </div>
 
-        <div className="max-lg:flex-1 max-lg:overflow-y-auto max-lg:overscroll-contain p-5">
-          <CatalogSearch />
-
+        <div className="px-5 py-2 max-lg:flex-1 max-lg:overflow-y-auto max-lg:overscroll-contain">
           <FilterGroup title="Categories">
             <FilterOption label="All Courses" count={facets.categories.all} active={!filters.category} to={{ category: null }} />
             {(courseCategories as readonly CourseCategory[]).map((category) => (
@@ -164,7 +185,7 @@ export function CourseFilterPanel({ facets }: { facets: Facets }) {
           <button
             type="button"
             disabled={activeCount === 0}
-            onClick={() => navigate({ query: "", category: null, level: null, duration: null })}
+            onClick={clearAll}
             className="h-11 rounded-lg px-4 text-sm font-medium text-foreground hover:bg-foreground/5 disabled:opacity-40"
           >
             Clear all
@@ -182,12 +203,28 @@ export function CourseFilterPanel({ facets }: { facets: Facets }) {
   );
 }
 
+/* A section that folds open and shut. Folded links stay in the page (hidden), so crawlers still find them. */
 function FilterGroup({ title, children }: { title: string; children: ReactNode }) {
+  const [open, setOpen] = useState(true);
+  const regionId = useId();
   return (
-    <div className="mt-6">
-      <h2 className="text-[0.9375rem] font-semibold text-foreground">{title}</h2>
-      <ul className="mt-2">{children}</ul>
-    </div>
+    <section className="border-b border-border py-4 last:border-b-0">
+      <h3>
+        <button
+          type="button"
+          aria-expanded={open}
+          aria-controls={regionId}
+          onClick={() => setOpen((o) => !o)}
+          className="flex w-full items-center justify-between rounded-md text-[0.9375rem] font-semibold text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+        >
+          {title}
+          <ChevronDownIcon className={`size-4 text-muted-foreground transition-transform duration-200 ${open ? "rotate-180" : ""}`} />
+        </button>
+      </h3>
+      <ul id={regionId} hidden={!open} className="mt-2">
+        {children}
+      </ul>
+    </section>
   );
 }
 
@@ -233,68 +270,5 @@ function FilterOption({
       </CatalogLink>
       {children}
     </li>
-  );
-}
-
-/*
- * Search-as-you-type, debounced. It's also a plain GET form carrying the other
- * active filters, so pressing Enter works before JavaScript loads.
- */
-function CatalogSearch() {
-  const { filters, searchText, setSearchText, navigate } = useCatalog();
-  const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
-
-  useEffect(() => () => clearTimeout(timer.current), []);
-
-  function onChange(text: string) {
-    setSearchText(text);
-    clearTimeout(timer.current);
-    timer.current = setTimeout(() => navigate({ query: text }, { replace: true, typing: true }), 350);
-  }
-
-  function onSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    clearTimeout(timer.current);
-    navigate({ query: searchText }, { replace: true, typing: true });
-  }
-
-  const carried = { category: filters.category, level: filters.level, duration: filters.duration };
-
-  return (
-    <form action="/courses" role="search" onSubmit={onSubmit}>
-      {Object.entries(carried).map(([name, value]) => value && <input key={name} type="hidden" name={name} value={value} />)}
-      {filters.sort !== "popular" && <input type="hidden" name="sort" value={filters.sort} />}
-      {filters.view !== "grid" && <input type="hidden" name="view" value={filters.view} />}
-      <label htmlFor="course-search" className="sr-only">
-        Search courses
-      </label>
-      <div className="relative">
-        <SearchIcon className="pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-muted-foreground" />
-        <input
-          id="course-search"
-          name="q"
-          type="search"
-          value={searchText}
-          onChange={(event) => onChange(event.target.value)}
-          placeholder="Search courses"
-          autoComplete="off"
-          enterKeyHint="search"
-          className="h-11 w-full rounded-xl border border-border bg-background pr-10 pl-10 text-[0.9375rem] text-foreground outline-none placeholder:text-muted-foreground focus:border-brand focus:ring-4 focus:ring-brand/15 [&::-webkit-search-cancel-button]:appearance-none"
-        />
-        {searchText && (
-          <button
-            type="button"
-            onClick={() => {
-              clearTimeout(timer.current);
-              navigate({ query: "" });
-            }}
-            aria-label="Clear search"
-            className="absolute top-1/2 right-2 flex size-7 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground hover:bg-foreground/5 hover:text-foreground"
-          >
-            <CloseIcon className="size-4" />
-          </button>
-        )}
-      </div>
-    </form>
   );
 }

@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { useState, type ComponentType, type ReactNode, type SVGProps } from "react";
 import { postCategories } from "@/lib/post-categories";
-import { saveSettings } from "@/app/(studio)/studio/settings/actions";
+import { savePlanAllowances, saveSettings } from "@/app/(studio)/studio/settings/actions";
+import type { PlanAllowance } from "@/lib/allowances";
 import { CURRENCIES, currencySymbol, formatMoney } from "@/lib/money";
 import { defaultSettings, type PlanSettings, type SiteSettings } from "@/lib/site-settings";
 import { runAction } from "@/lib/studio-store";
@@ -79,7 +80,18 @@ function validate(s: SiteSettings) {
 
 const sectionOf = (key: string): SectionKey => (key.startsWith("plan.") ? "pricing" : (key.split(".")[0] as SectionKey));
 
-export function SettingsManager({ settings, initialSection, posts }: { settings: SiteSettings; initialSection: SectionKey; posts: { slug: string; title: string }[] }) {
+export function SettingsManager({
+  settings,
+  allowances,
+  initialSection,
+  posts,
+}: {
+  settings: SiteSettings;
+  /** Downloads and edits per plan (migration 016); null before it's run */
+  allowances: PlanAllowance[] | null;
+  initialSection: SectionKey;
+  posts: { slug: string; title: string }[];
+}) {
   const saved = withDefaults(settings);
   const savedJson = JSON.stringify(saved);
   const [seen, setSeen] = useState(savedJson);
@@ -94,7 +106,20 @@ export function SettingsManager({ settings, initialSection, posts }: { settings:
     setDraft(saved);
   }
 
-  const dirty = JSON.stringify({ ...draft, updatedAt: saved.updatedAt }) !== savedJson;
+  // Allowances live in their own table, so they have their own draft (saved by the same button).
+  const savedAllowances = JSON.stringify(allowances);
+  const [seenAllowances, setSeenAllowances] = useState(savedAllowances);
+  const [allowanceDraft, setAllowanceDraft] = useState(allowances);
+  if (seenAllowances !== savedAllowances) {
+    setSeenAllowances(savedAllowances);
+    setAllowanceDraft(allowances);
+  }
+  const patchAllowance = (plan: PlanAllowance["plan"], value: Partial<PlanAllowance>) =>
+    setAllowanceDraft((list) => list && list.map((a) => (a.plan === plan ? { ...a, ...value } : a)));
+
+  const settingsDirty = JSON.stringify({ ...draft, updatedAt: saved.updatedAt }) !== savedJson;
+  const allowancesDirty = JSON.stringify(allowanceDraft) !== savedAllowances;
+  const dirty = settingsDirty || allowancesDirty;
   const errors = validate(draft);
   const errorCount = Object.keys(errors).length;
   const err = (key: string) => (showErrors ? errors[key] : undefined);
@@ -121,7 +146,11 @@ export function SettingsManager({ settings, initialSection, posts }: { settings:
       return;
     }
     setShowErrors(false);
-    runAction(() => saveSettings(draft)).then((result) => result.ok && show("Settings saved"));
+    const saves = [
+      settingsDirty && runAction(() => saveSettings(draft)),
+      allowancesDirty && allowanceDraft && runAction(() => savePlanAllowances(allowanceDraft)),
+    ].filter((save) => !!save);
+    Promise.all(saves).then((results) => results.every((result) => result.ok) && show("Settings saved"));
   }
 
   const sectionErrors = (key: SectionKey) => showErrors && Object.keys(errors).some((k) => sectionOf(k) === key);
@@ -306,6 +335,7 @@ export function SettingsManager({ settings, initialSection, posts }: { settings:
                     <Field label="Button text" htmlFor={`plan-${p.slug}-cta`} required error={err(`plan.${p.slug}.cta`)}>
                       <Input id={`plan-${p.slug}-cta`} maxLength={28} value={p.cta} onChange={(e) => patchPlan(p.slug, { cta: e.target.value })} aria-invalid={!!err(`plan.${p.slug}.cta`)} />
                     </Field>
+                    <AllowanceFields slug={p.slug} allowance={allowanceDraft?.find((a) => a.plan === p.slug) ?? null} onChange={(value) => patchAllowance(p.slug, value)} />
                     </div>
                     <Field label="What's included" htmlFor={`plan-${p.slug}-highlights`} error={err(`plan.${p.slug}.highlights`)} hint="One feature per line, shown with a check mark.">
                       <ListEditor id={`plan-${p.slug}-highlights`} items={p.highlights} onChange={(highlights) => patchPlan(p.slug, { highlights })} min={3} max={10} maxLength={60} placeholders={["e.g. All Beginner courses", "e.g. Mix feedback on 2 recordings", "e.g. Certificates of completion"]} />
@@ -556,7 +586,7 @@ export function SettingsManager({ settings, initialSection, posts }: { settings:
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-card/95 p-3 pl-5 shadow-[0_12px_40px_-12px_rgb(0_0_0/0.35)] backdrop-blur">
             <p className="text-sm text-foreground">{showErrors && errorCount ? `${errorCount} ${errorCount === 1 ? "field needs" : "fields need"} attention` : "You have unsaved changes"}</p>
             <div className="flex gap-2">
-              <button type="button" tabIndex={dirty ? 0 : -1} onClick={() => { setDraft(saved); setShowErrors(false); }} className={`${secondaryButton} h-9`}>
+              <button type="button" tabIndex={dirty ? 0 : -1} onClick={() => { setDraft(saved); setAllowanceDraft(allowances); setShowErrors(false); }} className={`${secondaryButton} h-9`}>
                 Discard
               </button>
               <button type="button" tabIndex={dirty ? 0 : -1} onClick={onSave} className={`${primaryButton} h-9`}>
@@ -568,6 +598,50 @@ export function SettingsManager({ settings, initialSection, posts }: { settings:
       </div>
       {toast}
     </div>
+  );
+}
+
+/* A plan's store downloads and edit requests. Empty = unlimited; the database enforces them. */
+function AllowanceFields({ slug, allowance, onChange }: { slug: string; allowance: PlanAllowance | null; onChange: (value: Partial<PlanAllowance>) => void }) {
+  if (!allowance) {
+    return (
+      <p className="rounded-xl border border-dashed border-border px-4 py-3 text-sm text-muted-foreground">
+        Download and edit limits need migration 016: run <code className="text-xs">supabase/migrations/20261012090000_edits_allowances.sql</code>.
+      </p>
+    );
+  }
+  const count = (value: string) => (value === "" ? null : Math.max(0, Math.floor(Number(value))));
+  const id = (name: string) => `plan-${slug}-${name}`;
+  return (
+    <fieldset className="rounded-xl border border-border p-4">
+      <legend className="px-1 text-sm font-medium text-foreground">Allowances</legend>
+      <p className="text-xs text-muted-foreground">Leave a box empty for unlimited. Admins have no limits.</p>
+      <div className="mt-3 grid grid-cols-2 gap-3">
+        <Field label="Store downloads" htmlFor={id("downloads")} hint="Different templates">
+          <Input id={id("downloads")} type="number" min={0} step={1} placeholder="Unlimited" value={allowance.downloads ?? ""} onChange={(e) => onChange({ downloads: count(e.target.value) })} />
+        </Field>
+        <Field label="Edit requests" htmlFor={id("edits")} hint="0 = no edits">
+          <Input id={id("edits")} type="number" min={0} step={1} placeholder="Unlimited" value={allowance.edits ?? ""} onChange={(e) => onChange({ edits: count(e.target.value) })} />
+        </Field>
+        <Field label="Waiting at once" htmlFor={id("open")} hint="Requests open at the same time">
+          <Input
+            id={id("open")}
+            type="number"
+            min={1}
+            step={1}
+            placeholder="No limit"
+            value={allowance.openEdits ?? ""}
+            onChange={(e) => onChange({ openEdits: e.target.value === "" ? null : Math.max(1, Math.floor(Number(e.target.value))) })}
+          />
+        </Field>
+        <Field label="Resets" htmlFor={id("period")}>
+          <Select id={id("period")} value={allowance.period} onChange={(e) => onChange({ period: e.target.value as PlanAllowance["period"] })}>
+            <option value="month">Every month</option>
+            <option value="total">Never (in total)</option>
+          </Select>
+        </Field>
+      </div>
+    </fieldset>
   );
 }
 

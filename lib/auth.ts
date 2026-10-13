@@ -1,6 +1,6 @@
-/* Form state and validation rules shared by the auth, account and challenge forms. */
+/* Form state and validation rules shared by the auth and account forms. */
 
-/** A form field name; auth, account and challenge forms share these types. */
+/** A form field name; auth and account forms share these types. */
 export type AuthField = string;
 
 export type AuthFormState = {
@@ -38,7 +38,7 @@ export function validateName(name: string) {
 }
 
 /** Where people land after signing in or up. */
-export const HOME_AFTER_AUTH = "/account/profile";
+export const HOME_AFTER_AUTH = "/account";
 
 /**
  * A ?next= value that's safe to redirect to: a path on this site only, so a

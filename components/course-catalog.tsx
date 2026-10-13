@@ -44,6 +44,9 @@ type Catalog = {
   setView: (view: CourseView) => void;
   drawerOpen: boolean;
   setDrawerOpen: (open: boolean) => void;
+  /** Desktop: the filter sidebar folded away, so the grid gets its room */
+  collapsed: boolean;
+  setCollapsed: (collapsed: boolean) => void;
 };
 
 const CatalogContext = createContext<Catalog | null>(null);
@@ -74,6 +77,7 @@ export function CatalogProvider({
   const [view, setViewState] = useState(serverFilters.view);
   const [searchText, setSearchText] = useState(serverFilters.query);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
 
   /*
    * Follow URL changes we didn't make (the "Courses" nav link, back/forward).
@@ -133,6 +137,8 @@ export function CatalogProvider({
         setView,
         drawerOpen,
         setDrawerOpen,
+        collapsed,
+        setCollapsed,
       }}
     >
       {children}
@@ -160,9 +166,27 @@ export function CatalogLink({
   return <Link {...props} href={hrefFor(to)} onClick={onClick} scroll={false} prefetch={false} />;
 }
 
+/* The filter sidebar beside the results; folding the sidebar away gives the results the full width. */
+export function CatalogLayout({ children }: { children: ReactNode }) {
+  const { collapsed } = useCatalog();
+  return <div className={`mt-6 grid grid-cols-1 items-start gap-6 lg:gap-8 ${collapsed ? "" : "lg:grid-cols-[17rem_minmax(0,1fr)]"}`}>{children}</div>;
+}
+
+/*
+ * Grid columns, as on /store: the page is full width, so covers grow before
+ * another column is added. One more column with the sidebar folded away.
+ */
+const gridColumns = {
+  open: "gap-2 sm:grid-cols-2 xl:grid-cols-3 min-[140rem]:grid-cols-4",
+  collapsed: "gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 min-[140rem]:grid-cols-5",
+};
+
+/** `sizes` for the covers in the grid, matching the columns above. */
+export const courseTileSizes = "(min-width: 140rem) 21vw, (min-width: 80rem) 27vw, (min-width: 64rem) 34vw, (min-width: 40rem) 46vw, 92vw";
+
 /** The results list: switches between grid and list and dims while new results load. */
 export function CatalogResults({ children }: { children: ReactNode }) {
-  const { filters, isPending } = useCatalog();
+  const { filters, isPending, collapsed } = useCatalog();
   const list = filters.view === "list";
 
   return (
@@ -170,7 +194,7 @@ export function CatalogResults({ children }: { children: ReactNode }) {
       data-view={filters.view}
       aria-busy={isPending || undefined}
       className={`grid transition-opacity duration-200 ${
-        list ? "grid-cols-1 gap-4 sm:gap-5" : "gap-6 sm:grid-cols-2 xl:grid-cols-3"
+        list ? "grid-cols-1 gap-4 sm:gap-5" : collapsed ? gridColumns.collapsed : gridColumns.open
       } ${isPending ? "opacity-50" : ""}`}
     >
       {children}

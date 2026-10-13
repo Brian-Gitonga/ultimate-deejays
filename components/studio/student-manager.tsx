@@ -204,7 +204,7 @@ export function StudentManager({ seed, initialQuery }: { seed: Student[]; initia
           title={confirm.action === "delete" ? `Delete ${confirm.student.name}'s account?` : `Suspend ${confirm.student.name}?`}
           body={
             confirm.action === "delete"
-              ? "Their progress, notes and challenge entries are removed permanently. This can't be undone."
+              ? "Their progress, notes and mixes are removed permanently. This can't be undone."
               : "They won't be able to log in or watch lessons until you reactivate them. Their progress is kept."
           }
           confirmLabel={confirm.action === "delete" ? "Delete account" : "Suspend student"}
@@ -298,7 +298,7 @@ function StudentDrawer({
               { label: "Courses", value: s.enrollments.length, icon: LessonIcon },
               { label: "Avg progress", value: `${averageProgress(s)}%`, icon: TrophyIcon },
               { label: "Mixes submitted", value: s.mixesSubmitted, icon: MessageIcon },
-              { label: "Challenge entries", value: s.challengeEntries, icon: TrophyIcon },
+              { label: "Paid", value: money(s.paid), icon: WalletIcon },
             ].map((stat) => (
               <div key={stat.label} className="flex flex-col-reverse rounded-xl border border-border p-3">
                 <dt className="text-xs text-muted-foreground">{stat.label}</dt>

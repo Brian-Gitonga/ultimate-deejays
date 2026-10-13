@@ -1,16 +1,15 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Remove demo data
 --
--- Deletes every row scripts/demo-data.sql and scripts/demo-store.sql added
--- (is_demo = true) and nothing else. Counters (course ratings, challenge entry
--- counts) update themselves.
+-- Deletes every row scripts/demo-data.sql, demo-store.sql and demo-lower-thirds.sql added
+-- (is_demo = true) and nothing else. Counters (course ratings)
+-- update themselves.
 -- ─────────────────────────────────────────────────────────────────────────────
 
 delete from public.affiliate_payouts where is_demo;
 delete from public.referral_clicks where is_demo;
 delete from public.payouts where is_demo;
 delete from public.payments where is_demo;
-delete from public.challenge_entries where is_demo;
 delete from public.course_reviews where is_demo;
 delete from public.mix_submissions where is_demo;
 
@@ -27,7 +26,6 @@ select 'payments' as "table", count(*) as demo_rows_left from public.payments wh
 union all select 'payouts', count(*) from public.payouts where is_demo
 union all select 'affiliate_payouts', count(*) from public.affiliate_payouts where is_demo
 union all select 'referral_clicks', count(*) from public.referral_clicks where is_demo
-union all select 'challenge_entries', count(*) from public.challenge_entries where is_demo
 union all select 'course_reviews', count(*) from public.course_reviews where is_demo
 union all select 'mix_submissions', count(*) from public.mix_submissions where is_demo
 union all select 'store_resources', case when to_regclass('public.store_resources') is null then 0

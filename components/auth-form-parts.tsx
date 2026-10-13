@@ -36,7 +36,8 @@ type FieldProps = {
   onEdit?: (name: AuthField) => void;
 } & Omit<InputHTMLAttributes<HTMLInputElement>, "name">;
 
-const inputClass = (invalid: boolean) =>
+/** The look of every text box in account and sign-in forms. */
+export const inputClass = (invalid: boolean) =>
   `h-12 w-full rounded-xl border bg-background px-4 text-[0.9375rem] text-foreground shadow-xs outline-none transition placeholder:text-muted-foreground/80 focus:ring-4 ${
     invalid
       ? "border-red-500 focus:border-red-500 focus:ring-red-500/15 dark:border-red-400"

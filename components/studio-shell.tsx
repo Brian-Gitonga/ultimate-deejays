@@ -3,7 +3,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { DashboardShell, type NavGroup } from "./dashboard-shell";
-import { DashboardIcon, DownloadIcon, HandshakeIcon, ImageIcon, LessonIcon, MailIcon, MessageIcon, MicIcon, PencilIcon, PlusIcon, SearchIcon, SettingsIcon, StarIcon, TagIcon, TrophyIcon, UsersIcon, WalletIcon } from "./icons";
+import { DashboardIcon, DownloadIcon, HandshakeIcon, ImageIcon, LessonIcon, MailIcon, MessageIcon, MicIcon, PencilIcon, PlusIcon, SearchIcon, SettingsIcon, SlidersIcon, StarIcon, TagIcon, UsersIcon, WalletIcon } from "./icons";
 import { StudioNotices } from "./studio/studio-notices";
 
 const navGroups: NavGroup[] = [
@@ -26,15 +26,6 @@ const navGroups: NavGroup[] = [
       { href: "/studio/students", label: "Students", icon: UsersIcon },
       { href: "/studio/instructors", label: "Instructors", icon: MicIcon },
       { href: "/studio/feedback", label: "Mix feedback", icon: MessageIcon },
-      {
-        href: "/studio/challenges",
-        label: "Challenges",
-        icon: TrophyIcon,
-        children: [
-          { href: "/studio/challenges", label: "Manage challenges" },
-          { href: "/studio/challenges/new", label: "Create challenge" },
-        ],
-      },
       { href: "/studio/reviews", label: "Reviews", icon: StarIcon },
     ],
   },
@@ -51,6 +42,7 @@ const navGroups: NavGroup[] = [
         ],
       },
       { href: "/studio/store", label: "Store", icon: DownloadIcon },
+      { href: "/studio/edits", label: "Edit requests", icon: SlidersIcon },
     ],
   },
   {
@@ -66,11 +58,11 @@ const navGroups: NavGroup[] = [
   },
 ];
 
-export type StudioCounts = { affiliates: number; mixes: number; reviews: number; notifications: number };
+export type StudioCounts = { affiliates: number; mixes: number; reviews: number; edits: number; notifications: number };
 
 export function StudioShell({ admin, counts, children }: { admin: { name: string; image: string | null }; counts: StudioCounts; children: ReactNode }) {
   // Waiting items next to their section: applications, mixes to review, reviews to answer.
-  const badges: Record<string, number> = { "/studio/affiliates": counts.affiliates, "/studio/feedback": counts.mixes, "/studio/reviews": counts.reviews };
+  const badges: Record<string, number> = { "/studio/affiliates": counts.affiliates, "/studio/feedback": counts.mixes, "/studio/reviews": counts.reviews, "/studio/edits": counts.edits };
   const groups = navGroups.map((g) => ({
     ...g,
     items: g.items.map((item) => (item.href in badges ? { ...item, badge: badges[item.href] ? String(badges[item.href]) : undefined } : item)),

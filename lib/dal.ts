@@ -80,7 +80,7 @@ export const getViewer = cache(async (): Promise<Viewer | null> => {
 });
 
 /** Signed in, or off to the log-in page (coming back to `next` afterwards). */
-export async function requireViewer(next = "/account/profile") {
+export async function requireViewer(next = "/account") {
   const viewer = await getViewer();
   if (!viewer) redirect(`/login?next=${encodeURIComponent(next)}`);
   // Suspended in Studio → Students while signed in: end the session.
@@ -91,7 +91,7 @@ export async function requireViewer(next = "/account/profile") {
 /** Admins only. Everyone else goes back to their account. */
 export async function requireAdmin() {
   const viewer = await requireViewer("/studio");
-  if (viewer.role !== "admin") redirect("/account/profile");
+  if (viewer.role !== "admin") redirect("/account");
   return viewer;
 }
 

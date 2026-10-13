@@ -2,6 +2,8 @@
 
 import { z } from "zod";
 import type { ActionResult } from "@/lib/action-result";
+import type { PlanAllowance } from "@/lib/allowances";
+import { toAllowance } from "@/lib/db/allowances";
 import { CONTENT_TAGS } from "@/lib/db/content-client";
 import { mergeSettings, settingsData, type SiteSettings } from "@/lib/site-settings";
 import { adminAction, must, StudioError } from "@/lib/studio-action";
@@ -53,6 +55,36 @@ export async function saveSettings(settings: SiteSettings): Promise<ActionResult
           .single(),
       );
       return mergeSettings(row.data, row.updated_at);
+    },
+    { tags: [CONTENT_TAGS.settings] },
+  );
+}
+
+const allowanceSchema = z
+  .array(
+    z.object({
+      plan: z.enum(["warm-up", "resident", "headliner"]),
+      downloads: z.number().int().min(0, "Downloads can't be negative.").max(100_000).nullable(),
+      edits: z.number().int().min(0, "Edit requests can't be negative.").max(10_000).nullable(),
+      openEdits: z.number().int().min(1, "Allow at least 1 request waiting at once, or leave it empty.").max(100).nullable(),
+      period: z.enum(["month", "total"]),
+    }),
+  )
+  .length(3);
+
+/** Saves each plan's download and edit allowance (Studio → Settings → Pricing page). The database enforces them straight away. */
+export async function savePlanAllowances(allowances: PlanAllowance[]): Promise<ActionResult<PlanAllowance[]>> {
+  return adminAction(
+    "save the allowances",
+    async ({ supabase }) => {
+      const parsed = allowanceSchema.safeParse(allowances);
+      if (!parsed.success) throw new StudioError(parsed.error.issues[0].message);
+      for (const a of parsed.data) {
+        must(await supabase.from("plan_allowances").update({ downloads: a.downloads, edits: a.edits, open_edits: a.openEdits, period: a.period }).eq("plan", a.plan).select("plan"));
+      }
+      const rows = must(await supabase.from("plan_allowances").select("plan, downloads, edits, open_edits, period"));
+      const order = ["warm-up", "resident", "headliner"];
+      return rows.map(toAllowance).sort((a, b) => order.indexOf(a.plan) - order.indexOf(b.plan));
     },
     { tags: [CONTENT_TAGS.settings] },
   );

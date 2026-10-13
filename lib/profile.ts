@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { validateName } from "./auth";
+import { normalizePhone } from "./phone";
 import type { Enums, Tables } from "./supabase/database.types";
 
 /*
@@ -35,6 +36,8 @@ export type Profile = {
   soundcloud: string;
   /** Public URL (Supabase Storage or Google), or null for initials */
   avatarUrl: string | null;
+  /** For text messages about their edits: +254712345678, or "" */
+  phone: string;
 };
 
 export function toProfile(row: Tables<"profiles">): Profile {
@@ -49,6 +52,8 @@ export function toProfile(row: Tables<"profiles">): Profile {
     instagram: row.instagram,
     soundcloud: row.soundcloud,
     avatarUrl: row.avatar_url,
+    // Migration 016 adds the column.
+    phone: row.phone ?? "",
   };
 }
 
@@ -79,6 +84,17 @@ export const profileInputSchema = z.object({
       (v) => v === "" || (v.length <= 200 && /^https:\/\/(www\.|on\.)?soundcloud\.com\/\S+$/.test(v)),
       "Paste your full SoundCloud link, starting with https://soundcloud.com/.",
     ),
+  phone: z
+    .string()
+    .trim()
+    .transform((v, ctx) => {
+      const phone = normalizePhone(v);
+      if (phone === null) {
+        ctx.addIssue({ code: "custom", message: "Enter your number like 0712 345 678, or with its country code (+44…)." });
+        return z.NEVER;
+      }
+      return phone;
+    }),
 });
 
 export type ProfileInput = z.infer<typeof profileInputSchema>;

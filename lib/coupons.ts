@@ -15,6 +15,8 @@ export type Coupon = {
   discountValue: number;
   /** Plans it works on; empty = every paid plan */
   plans: CouponPlan[];
+  /** Only these accounts (lower-case emails) can use it; empty = anyone (migration 016) */
+  emails: string[];
   /** null = unlimited */
   maxRedemptions: number | null;
   redemptions: number;

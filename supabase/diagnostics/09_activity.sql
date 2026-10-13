@@ -1,7 +1,7 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- The latest 100 things that happened (what Studio → Notifications lists):
--- sign-ups, affiliate applications, payments, refunds, challenge entries,
--- reviews and mixes. Read-only.
+-- sign-ups, affiliate applications, payments, refunds, reviews and mixes.
+-- Read-only.
 -- ─────────────────────────────────────────────────────────────────────────────
 
 select created_at, kind, title, detail, href

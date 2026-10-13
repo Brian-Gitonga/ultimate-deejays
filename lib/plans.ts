@@ -27,7 +27,6 @@ export const plans: Plan[] = [
     highlights: [
       "DJ Fundamentals course",
       "Free lessons from every category",
-      "Enter beginner challenges",
       "Community access",
       "Progress tracking & lesson notes",
     ],
@@ -45,7 +44,6 @@ export const plans: Plan[] = [
       "Everything in Warm-Up",
       "All Beginner & Intermediate courses",
       "Practice tracks, stems & cue sheets",
-      "Enter every challenge",
       "Certificates of completion",
       "Mix feedback on 2 recordings",
     ],
@@ -92,7 +90,6 @@ export const comparison: { group: string; rows: { label: string; values: [Cell, 
   {
     group: "Community",
     rows: [
-      { label: "Challenges", values: ["Beginner", "All", "All"] },
       { label: "Community access", values: [true, true, true] },
       { label: "Progress tracking & notes", values: [true, true, true] },
     ],

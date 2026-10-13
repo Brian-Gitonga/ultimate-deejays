@@ -54,15 +54,17 @@ async function findAffiliate(admin: ReturnType<typeof createAdminClient>, match:
   };
 }
 
-async function couponProblem(admin: ReturnType<typeof createAdminClient>, coupon: Tables<"coupons">, plan: PaidPlan, planName: string, buyerId: string) {
+async function couponProblem(admin: ReturnType<typeof createAdminClient>, coupon: Tables<"coupons">, plan: PaidPlan, planName: string, buyer: { id: string; email: string }) {
   const now = Date.now();
   if (!coupon.active) return "That code has been switched off.";
   if (coupon.starts_at && Date.parse(coupon.starts_at) > now) return "That code isn't active yet.";
   if (coupon.expires_at && Date.parse(coupon.expires_at) <= now) return "That code has expired.";
   if (coupon.max_redemptions !== null && coupon.redemptions >= coupon.max_redemptions) return "That code has been fully used.";
   if (coupon.plans.length && !coupon.plans.includes(plan)) return `That code doesn't apply to the ${planName} plan.`;
+  // Codes for certain people (migration 016).
+  if (coupon.emails?.length && !coupon.emails.includes(buyer.email.toLowerCase())) return "That code is for a different account.";
   if (coupon.once_per_customer) {
-    const { count } = await admin.from("checkouts").select("id", { count: "exact", head: true }).eq("user_id", buyerId).eq("coupon_id", coupon.id).eq("status", "paid");
+    const { count } = await admin.from("checkouts").select("id", { count: "exact", head: true }).eq("user_id", buyer.id).eq("coupon_id", coupon.id).eq("status", "paid");
     if (count) return "You've already used that code.";
   }
   return null;
@@ -99,7 +101,7 @@ export async function priceOrder(viewer: Viewer, plan: PaidPlan, typedCode: stri
   if (code) {
     const { data: coupon } = await admin.from("coupons").select("*").eq("code", code).maybeSingle();
     if (coupon) {
-      codeError = await couponProblem(admin, coupon, plan, target.name, viewer.id);
+      codeError = await couponProblem(admin, coupon, plan, target.name, { id: viewer.id, email: viewer.email });
       if (!codeError) {
         couponId = coupon.id;
         discount = discountOf(base, coupon.discount_type as "percent" | "fixed", Number(coupon.discount_value));

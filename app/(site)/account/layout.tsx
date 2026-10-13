@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { AccountSidebar } from "@/components/account-sidebar";
 import { requireViewer } from "@/lib/dal";
+import { countReadyEdits } from "@/lib/db/edits";
 import { getSiteSettings } from "@/lib/db/settings";
 
 // Private pages: keep them out of search results.
@@ -13,6 +14,7 @@ export const metadata: Metadata = {
 export default async function AccountLayout({ children }: { children: ReactNode }) {
   const [viewer, settings] = await Promise.all([requireViewer(), getSiteSettings()]);
   const { profile } = viewer;
+  const readyEdits = viewer.role === "admin" ? 0 : await countReadyEdits(viewer.id);
 
   return (
     <main className="flex-1">
@@ -26,6 +28,7 @@ export default async function AccountLayout({ children }: { children: ReactNode 
             role: viewer.role,
             affiliateStatus: viewer.affiliate?.status ?? null,
             planName: settings.plans.find((p) => p.slug === viewer.plan)?.name ?? viewer.plan,
+            readyEdits,
           }}
         />
         <div className="min-w-0 space-y-6">{children}</div>

@@ -4,7 +4,7 @@ import { useCallback, useState, useSyncExternalStore } from "react";
 import type { ActionResult } from "./action-result";
 
 /*
- * Studio collections (courses, posts, challenges, students…), backed by the
+ * Studio collections (courses, posts, store resources, students…), backed by the
  * database. Each manager gets the server's rows as `seed` and the Server
  * Actions that change them. Edits show instantly (optimistic), are rolled
  * back if the server refuses them, and any failure appears in the studio's

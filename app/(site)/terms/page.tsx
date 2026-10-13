@@ -6,7 +6,7 @@ import { currencyName } from "@/lib/money";
 
 export const metadata: Metadata = {
   title: "Terms & Conditions",
-  description: "The terms for using Ultimate Deejays: accounts, plans and payments, course content, challenges, the store and the affiliate program.",
+  description: "The terms for using Ultimate Deejays: accounts, plans and payments, course content, the store, lower thirds and the affiliate program.",
   alternates: { canonical: "/terms" },
 };
 
@@ -36,7 +36,7 @@ export default async function TermsPage() {
       <section>
         <h2>2. Your account</h2>
         <ul>
-          <li>You need an account to watch lessons, download files, enter challenges and buy a plan.</li>
+          <li>You need an account to watch lessons, download files and buy a plan.</li>
           <li>Give accurate details, keep your password private, and don&apos;t share your account. One account is for one person.</li>
           <li>You must be at least 13 to create an account. If you are under 18, a parent or guardian should agree to these terms with you.</li>
           <li>You can delete your account at any time from Account → Settings.</li>
@@ -73,11 +73,11 @@ export default async function TermsPage() {
       </section>
 
       <section>
-        <h2>5. Challenges, reviews and mixes</h2>
+        <h2>5. Reviews and mixes</h2>
         <ul>
-          <li>When you enter a challenge, submit a mix or write a review, you confirm the work is yours and that you have the right to share it.</li>
-          <li>You keep ownership of your mixes. You give us permission to show your entry or review on the site and in our promotion of the challenge.</li>
-          <li>We may remove content that is offensive, infringes someone else&apos;s rights, or breaks a challenge&apos;s rules.</li>
+          <li>When you submit a mix or write a review, you confirm the work is yours and that you have the right to share it.</li>
+          <li>You keep ownership of your mixes. You give us permission to show your review on the site.</li>
+          <li>We may remove content that is offensive, or infringes someone else&apos;s rights.</li>
         </ul>
       </section>
 

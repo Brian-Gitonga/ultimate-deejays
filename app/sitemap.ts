@@ -1,14 +1,15 @@
 import type { MetadataRoute } from "next";
 import { courseCategories, type CourseCategory } from "@/lib/course-taxonomy";
-import { getPublicChallenges } from "@/lib/db/challenges";
 import { getPublishedCourses } from "@/lib/db/courses";
 import { getLivePosts } from "@/lib/db/posts";
 import { getStoreResources } from "@/lib/db/store";
 import { siteUrl } from "@/lib/site";
+import { resourcePath } from "@/lib/store";
 
-/* Every indexable page, including each published course, live post, challenge and store resource. */
+/* Every indexable page, including each published course, live post, store resource and lower third. */
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const [courses, posts, challenges, resources] = await Promise.all([getPublishedCourses(), getLivePosts(), getPublicChallenges(), getStoreResources()]);
+  const [courses, posts, resources] = await Promise.all([getPublishedCourses(), getLivePosts(), getStoreResources()]);
+  const lowerThirds = resources.filter((r) => r.lowerThird);
   const url = (path: string) => new URL(path, siteUrl).toString();
   const newestCourse = courses.map((c) => c.publishedAt).sort().at(-1);
   const newestPost = posts.map((p) => p.publishedAt).sort().at(-1);
@@ -37,10 +38,9 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       priority: 0.6,
     })),
     { url: url("/pricing"), changeFrequency: "monthly", priority: 0.8 },
-    { url: url("/challenges"), changeFrequency: "weekly", priority: 0.7 },
-    ...challenges.map((c) => ({ url: url(`/challenges/${c.slug}`), lastModified: c.opens, changeFrequency: "weekly" as const, priority: 0.5 })),
     { url: url("/store"), lastModified: resources.map((r) => r.publishedAt).sort().at(-1), changeFrequency: "weekly", priority: 0.7 },
-    ...resources.map((r) => ({ url: url(`/store/${r.slug}`), lastModified: r.publishedAt, changeFrequency: "monthly" as const, priority: 0.5 })),
+    { url: url("/lower-thirds"), lastModified: lowerThirds.map((r) => r.publishedAt).sort().at(-1), changeFrequency: "weekly", priority: 0.7 },
+    ...resources.map((r) => ({ url: url(resourcePath(r.slug, r.lowerThird)), lastModified: r.publishedAt, changeFrequency: "monthly" as const, priority: 0.5 })),
     { url: url("/about"), changeFrequency: "monthly", priority: 0.5 },
     { url: url("/contact"), changeFrequency: "yearly", priority: 0.4 },
     { url: url("/careers"), changeFrequency: "monthly", priority: 0.3 },

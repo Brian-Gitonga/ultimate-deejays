@@ -13,7 +13,7 @@ import { CheckIcon, ClockIcon, CloseIcon, PauseIcon, PencilIcon, PercentIcon, Pl
 import { Drawer } from "./drawer";
 import { ConfirmDialog, ManageTable, RowMenu, useToast } from "./manage-table";
 import { statusMeta } from "./status";
-import { Field, Input, Kpi, Select, Switch, primaryButton } from "./ui";
+import { Field, Input, Kpi, Select, Switch, Textarea, primaryButton } from "./ui";
 
 type PlanPrices = Record<CouponPlan, { name: string; price: number }>;
 
@@ -44,6 +44,7 @@ const blank = (): Coupon => ({
   discountType: "percent",
   discountValue: 20,
   plans: [],
+  emails: [],
   maxRedemptions: null,
   redemptions: 0,
   oncePerCustomer: true,
@@ -78,7 +79,7 @@ export function CouponManager({
   const [deleting, setDeleting] = useState<Coupon | null>(null);
   const { show, toast } = useToast();
   const money = (n: number) => formatMoney(n, currency);
-  const off = (c: Coupon) => (c.discountType === "percent" ? `${c.discountValue}% off` : `${money(c.discountValue)} off`);
+  const off = (c: Coupon) => (c.discountType === "percent" ? (c.discountValue >= 100 ? "Free (100% off)" : `${c.discountValue}% off`) : `${money(c.discountValue)} off`);
   const planList = (c: Coupon) => (c.plans.length ? c.plans.map((p) => plans[p].name).join(", ") : "All paid plans");
 
   const live = items.filter((c) => couponState(c, today) === "live").length;
@@ -121,7 +122,9 @@ export function CouponManager({
             render: (c) => (
               <span className="block min-w-0">
                 <span className="block font-mono font-semibold text-foreground">{c.code}</span>
-                <span className="block max-w-[16rem] truncate text-xs text-muted-foreground">{c.description || planList(c)}</span>
+                <span className="block max-w-[16rem] truncate text-xs text-muted-foreground">
+                  {c.emails.length ? `Only for ${c.emails.length === 1 ? c.emails[0] : `${c.emails.length} people`}` : c.description || planList(c)}
+                </span>
               </span>
             ),
           },
@@ -234,6 +237,8 @@ function CouponDrawer({
   const titleId = useId();
   const isNew = !coupon.code;
   const [draft, setDraft] = useState(coupon);
+  // Typed freely; the list of emails is read from it as they type.
+  const [emailsText, setEmailsText] = useState(coupon.emails.join("\n"));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const set = <K extends keyof Coupon>(key: K, value: Coupon[K]) => setDraft((d) => ({ ...d, [key]: value }));
@@ -298,6 +303,25 @@ function CouponDrawer({
           <Input id="coupon-value" type="number" min={0} max={draft.discountType === "percent" ? 100 : undefined} step="0.01" value={draft.discountValue || ""} onChange={(e) => set("discountValue", Number(e.target.value))} />
         </Field>
       </div>
+      {!(draft.discountType === "percent" && draft.discountValue >= 100) && (
+        <button type="button" onClick={() => setDraft((d) => ({ ...d, discountType: "percent", discountValue: 100 }))} className="-mt-2 text-sm font-medium text-brand hover:underline">
+          Make it free (100% off)
+        </button>
+      )}
+
+      <Field label="Only for these people" htmlFor="coupon-emails" hint="One email per line, the one they signed up with. Empty = anyone. Handy for gifting someone a plan.">
+        <Textarea
+          id="coupon-emails"
+          rows={3}
+          value={emailsText}
+          placeholder="e.g. jane@example.com"
+          onChange={(e) => {
+            setEmailsText(e.target.value);
+            // Anything that can't be part of an email separates them (new lines, commas, spaces).
+            set("emails", [...new Set(e.target.value.toLowerCase().split(/[^a-z0-9@._+-]+/).filter(Boolean))].slice(0, 200));
+          }}
+        />
+      </Field>
 
       <fieldset>
         <legend className="text-sm font-medium text-foreground">Works on</legend>

@@ -132,7 +132,6 @@ function ResetPasswordForm({ email }: { email: string }) {
 
 const notificationOptions: { name: keyof EmailPrefs; label: string; hint: string }[] = [
   { name: "new-courses", label: "New courses", hint: "When a new course launches in a style you play." },
-  { name: "challenges", label: "Challenges", hint: "New challenges and results." },
   { name: "feedback", label: "Mix feedback", hint: "When an instructor replies to your mix." },
   { name: "newsletter", label: "Weekly newsletter", hint: "Practice tips and free packs every week." },
 ];

@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 
 export const metadata: Metadata = { title: "Settings" };
 
-const defaults: EmailPrefs = { "new-courses": true, challenges: true, feedback: true, newsletter: false };
+const defaults: EmailPrefs = { "new-courses": true, feedback: true, newsletter: false };
 
 export default async function SettingsPage() {
   const viewer = await requireViewer("/account/settings");

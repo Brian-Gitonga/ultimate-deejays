@@ -40,7 +40,7 @@ export default async function PrivacyPage() {
             name, photo or location. If you sign in with Google, we receive your name, email and photo from Google.
           </li>
           <li>
-            <strong>Learning activity:</strong> the courses you open, lessons you complete, notes, reviews, challenge entries, mixes you submit and files
+            <strong>Learning activity:</strong> the courses you open, lessons you complete, notes, reviews, mixes you submit and files
             you download.
           </li>
           <li>

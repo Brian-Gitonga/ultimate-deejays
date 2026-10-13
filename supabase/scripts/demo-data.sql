@@ -4,7 +4,6 @@
 -- Adds, all marked is_demo = true:
 --   • ~9 months of plan purchases (a few refunded), ending today
 --   • monthly business payouts for the finished months
---   • challenge entries for open challenges
 --   • reviews on published courses, and mixes waiting for feedback
 --   • referral clicks, referred sales and payouts for approved affiliates
 --     (approve one first if you want affiliate numbers)
@@ -45,7 +44,6 @@ declare
   v_pick        int;
   v_affiliate   uuid;
   v_commission  numeric;
-  v_row         record;
   v_i           int;
   v_currency    text;
   v_res         numeric;
@@ -153,55 +151,6 @@ begin
     having sum(p.commission) > 0;
   end loop;
 
-  -- Challenge entries for open challenges.
-  for v_row in select c.id from public.challenges c where c.published and current_date between c.opens and c.closes loop
-    insert into public.challenge_entries (challenge_id, name, email, youtube_url, youtube_id, status, is_demo, created_at)
-    select v_row.id,
-           v_first_names[1 + (g * 7) % array_length(v_first_names, 1)] || ' ' || v_last_names[1 + (g * 5) % array_length(v_last_names, 1)],
-           'demo.entry' || g || '.' || left(v_row.id::text, 8) || '@example.com',
-           'https://www.youtube.com/watch?v=' || v.vid,
-           v.vid,
-           case when g % 5 = 0 then 'shortlisted'::public.entry_status else 'submitted'::public.entry_status end,
-           true,
-           now() - make_interval(days => g, hours => g * 3)
-    from generate_series(1, 6 + floor(random() * 6)::int) g,
-         lateral (select (array['lrXFmNjNQZ0','irQXrpQdv_Y','bFlkhnPfU3Y','hUcH9LLqPpA','FVshXe200RI','44F0d2CbjM0'])[1 + g % 6] as vid) v;
-  end loop;
-
-  -- Reviews on published courses.
-  for v_row in select c.id from public.courses c where c.status = 'published' loop
-    insert into public.course_reviews (course_id, reviewer_name, reviewer_avatar, rating, body, is_demo, created_at)
-    select v_row.id,
-           v_first_names[1 + floor(random() * array_length(v_first_names, 1))::int] || ' '
-             || left(v_last_names[1 + floor(random() * array_length(v_last_names, 1))::int], 1) || '.',
-           '/images/students/student-' || (1 + floor(random() * 5))::int || '.jpg',
-           case when random() < 0.75 then 5 else 4 end,
-           (array[
-             'Recorded my first clean mix after week two. The step-by-step drills made it click.',
-             'Clear, practical and straight to the point. Exactly what I needed before my first gig.',
-             'The lesson on phrasing changed how I hear every track. Worth it for that alone.',
-             'Great pacing. I could practice each idea on my controller right after watching.',
-             'Would love a longer section at the end, but everything here is gold.'
-           ])[1 + floor(random() * 5)::int],
-           true,
-           now() - make_interval(days => floor(random() * 120)::int)
-    from generate_series(1, 2 + floor(random() * 2)::int);
-  end loop;
-
-  -- Mixes waiting for feedback (two already reviewed).
-  insert into public.mix_submissions (submitter_name, title, link, notes, is_demo, created_at)
-  select v_first_names[1 + (g * 3) % array_length(v_first_names, 1)] || ' ' || v_last_names[1 + (g * 7) % array_length(v_last_names, 1)],
-         (array['Friday warm-up set','Amapiano blend practice','First house mix','Open-format 30 min','Scratch routine take 3','Afro house sunset mix'])[g],
-         'https://soundcloud.com/demo-dj-' || g || '/mix',
-         (array['Are my transitions too long?','How is my EQ on the bass swaps?','Is the energy curve right for a warm-up?','Any tips on track selection?','Feedback on timing please.','Does the ending work?'])[g],
-         true,
-         now() - make_interval(days => g * 2)
-  from generate_series(1, 6) g;
-
-  update public.mix_submissions
-  set feedback = 'Great selection and smooth blends. Shorten the long blend at 12:30 and cut the bass on the incoming track earlier, then this is gig-ready.'
-  where is_demo and title in ('First house mix', 'Afro house sunset mix');
-
   raise notice 'Demo data added: % payments.', v_n;
 end $$;
 
@@ -210,6 +159,5 @@ select 'payments' as "table", count(*) as demo_rows from public.payments where i
 union all select 'payouts', count(*) from public.payouts where is_demo
 union all select 'affiliate_payouts', count(*) from public.affiliate_payouts where is_demo
 union all select 'referral_clicks', count(*) from public.referral_clicks where is_demo
-union all select 'challenge_entries', count(*) from public.challenge_entries where is_demo
 union all select 'course_reviews', count(*) from public.course_reviews where is_demo
 union all select 'mix_submissions', count(*) from public.mix_submissions where is_demo;

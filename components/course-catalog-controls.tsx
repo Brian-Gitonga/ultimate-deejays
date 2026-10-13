@@ -1,10 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import type { ComponentType, FocusEvent, FormEvent, MouseEvent, SVGProps } from "react";
+import { useEffect, useRef, type ComponentType, type FocusEvent, type FormEvent, type MouseEvent, type SVGProps } from "react";
 import { activeFilterCount, coursesHref, type CourseFilters, type CourseView } from "@/lib/course-filters";
 import { courseDurations, courseLevels, courseSorts, findTopic, type SortSlug } from "@/lib/course-taxonomy";
 import { CatalogLink, useCatalog } from "./course-catalog";
+import { FILTERS_BUTTON_ID } from "./course-filter-panel";
 import {
   ChevronDownIcon,
   ChevronLeftIcon,
@@ -15,22 +16,24 @@ import {
   FilterIcon,
   GridIcon,
   ListIcon,
+  SearchIcon,
 } from "./icons";
 
 const cleared: Partial<CourseFilters> = { query: "", category: null, level: null, duration: null };
 
-/** Opens the filter drawer on small screens. */
+/** Opens the filter drawer on small screens, and brings the folded sidebar back on large ones. */
 export function FiltersButton() {
-  const { filters, drawerOpen, setDrawerOpen } = useCatalog();
+  const { filters, drawerOpen, setDrawerOpen, collapsed, setCollapsed } = useCatalog();
   const count = activeFilterCount(filters);
 
   return (
     <button
+      id={FILTERS_BUTTON_ID}
       type="button"
-      onClick={() => setDrawerOpen(true)}
+      onClick={() => (window.matchMedia("(min-width: 64rem)").matches ? setCollapsed(false) : setDrawerOpen(true))}
       aria-expanded={drawerOpen}
       aria-controls="course-filters"
-      className="inline-flex h-10 items-center gap-2 rounded-lg border border-border bg-card px-3.5 text-sm font-medium text-foreground shadow-xs transition hover:bg-muted lg:hidden"
+      className={`inline-flex h-11 shrink-0 items-center gap-2 rounded-full border border-border bg-card px-4 text-sm font-medium text-foreground transition hover:bg-muted ${collapsed ? "" : "lg:hidden"}`}
     >
       <FilterIcon className="size-4" />
       Filters
@@ -44,28 +47,91 @@ export function FiltersButton() {
   );
 }
 
+/*
+ * Search-as-you-type, debounced, in the toolbar like the store's. It's also a
+ * plain GET form carrying the other active filters, so pressing Enter works
+ * before JavaScript loads.
+ */
+export function CatalogSearch() {
+  const { filters, searchText, setSearchText, navigate } = useCatalog();
+  const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
+
+  useEffect(() => () => clearTimeout(timer.current), []);
+
+  function onChange(text: string) {
+    setSearchText(text);
+    clearTimeout(timer.current);
+    timer.current = setTimeout(() => navigate({ query: text }, { replace: true, typing: true }), 350);
+  }
+
+  function onSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    clearTimeout(timer.current);
+    navigate({ query: searchText }, { replace: true, typing: true });
+  }
+
+  const carried = { category: filters.category, level: filters.level, duration: filters.duration };
+
+  return (
+    <form action="/courses" role="search" onSubmit={onSubmit} className="relative min-w-[11rem] flex-1 lg:max-w-sm">
+      {Object.entries(carried).map(([name, value]) => value && <input key={name} type="hidden" name={name} value={value} />)}
+      {filters.sort !== "popular" && <input type="hidden" name="sort" value={filters.sort} />}
+      {filters.view !== "grid" && <input type="hidden" name="view" value={filters.view} />}
+      <label htmlFor="course-search" className="sr-only">
+        Search courses
+      </label>
+      <input
+        id="course-search"
+        name="q"
+        type="search"
+        value={searchText}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder="Search courses"
+        autoComplete="off"
+        enterKeyHint="search"
+        className="h-11 w-full rounded-full border border-transparent bg-foreground/[0.05] pr-11 pl-5 text-[0.9375rem] text-foreground outline-none placeholder:text-muted-foreground focus:border-brand focus:bg-background focus:ring-4 focus:ring-brand/15 dark:bg-white/[0.06] [&::-webkit-search-cancel-button]:appearance-none"
+      />
+      {searchText ? (
+        <button
+          type="button"
+          onClick={() => {
+            clearTimeout(timer.current);
+            navigate({ query: "" });
+          }}
+          aria-label="Clear search"
+          className="absolute top-1/2 right-2.5 flex size-7 -translate-y-1/2 items-center justify-center rounded-full text-muted-foreground hover:bg-foreground/[0.06] hover:text-foreground"
+        >
+          <CloseIcon className="size-4" />
+        </button>
+      ) : (
+        <SearchIcon className="pointer-events-none absolute top-1/2 right-4 size-[1.125rem] -translate-y-1/2 text-muted-foreground" />
+      )}
+    </form>
+  );
+}
+
+/* "Sort by  Most popular ⌄": a native select drawn as a plain text menu, like the store's. */
 export function SortSelect() {
   const { filters, navigate } = useCatalog();
 
   return (
-    <div className="relative">
-      <label htmlFor="course-sort" className="sr-only">
-        Sort courses
-      </label>
-      <select
-        id="course-sort"
-        value={filters.sort}
-        onChange={(event) => navigate({ sort: event.target.value as SortSlug })}
-        className="h-10 cursor-pointer appearance-none rounded-lg border border-border bg-card pr-9 pl-3.5 text-sm font-medium text-foreground shadow-xs transition outline-none hover:border-foreground/25 focus:border-brand focus:ring-4 focus:ring-brand/15 dark:[color-scheme:dark]"
-      >
-        {courseSorts.map((sort) => (
-          <option key={sort.slug} value={sort.slug}>
-            {sort.name}
-          </option>
-        ))}
-      </select>
-      <ChevronDownIcon className="pointer-events-none absolute top-1/2 right-3 size-4 -translate-y-1/2 text-muted-foreground" />
-    </div>
+    <label className="flex items-center gap-1.5 text-sm whitespace-nowrap text-muted-foreground">
+      <span className="max-sm:sr-only">Sort by</span>
+      <span className="relative">
+        <select
+          value={filters.sort}
+          onChange={(event) => navigate({ sort: event.target.value as SortSlug })}
+          className="h-9 cursor-pointer appearance-none rounded-md bg-transparent pr-6 pl-1 text-sm font-semibold text-foreground outline-none [field-sizing:content] focus-visible:ring-2 focus-visible:ring-brand/40 dark:[color-scheme:dark]"
+        >
+          {courseSorts.map((sort) => (
+            <option key={sort.slug} value={sort.slug}>
+              {sort.name}
+            </option>
+          ))}
+        </select>
+        <ChevronDownIcon className="pointer-events-none absolute top-1/2 right-0.5 size-4 -translate-y-1/2 text-foreground" />
+      </span>
+    </label>
   );
 }
 
@@ -78,7 +144,7 @@ export function ViewToggle() {
   const { filters, setView } = useCatalog();
 
   return (
-    <div role="group" aria-label="Layout" className="flex gap-1.5">
+    <div role="group" aria-label="Layout" className="flex items-center gap-0.5 rounded-full bg-foreground/[0.05] p-1 dark:bg-white/[0.06]">
       {views.map(({ view, label, icon: Icon }) => {
         const active = filters.view === view;
         return (
@@ -96,13 +162,11 @@ export function ViewToggle() {
               event.preventDefault();
               setView(view);
             }}
-            className={`flex size-10 items-center justify-center rounded-lg border transition ${
-              active
-                ? "border-[#18181b] bg-[#18181b] text-white dark:border-foreground dark:bg-foreground dark:text-background"
-                : "border-border bg-card text-foreground shadow-xs hover:bg-muted"
+            className={`flex size-8 items-center justify-center rounded-full transition ${
+              active ? "bg-background text-foreground shadow-sm dark:bg-white/[0.14]" : "text-muted-foreground hover:text-foreground"
             }`}
           >
-            <Icon className="size-[1.125rem]" />
+            <Icon className="size-4" />
           </Link>
         );
       })}
@@ -155,7 +219,7 @@ export function ActiveFilters() {
             to={chip.clear}
             rel="nofollow"
             aria-label={`Remove filter: ${chip.label}`}
-            className="inline-flex h-8 items-center gap-1.5 rounded-full border border-border bg-card pr-2 pl-3 text-sm text-foreground transition hover:border-foreground/30 hover:bg-muted"
+            className="inline-flex h-8 items-center gap-2 rounded-md border border-border px-2.5 text-sm font-medium text-foreground transition hover:border-foreground/30 hover:bg-foreground/[0.04]"
           >
             {chip.label}
             <CloseIcon className="size-3.5 text-muted-foreground" />

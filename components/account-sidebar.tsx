@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import type { ComponentType, SVGProps } from "react";
 import { logOut } from "@/app/(site)/account/actions";
 import type { AffiliateStatus } from "@/lib/dal";
-import { ArrowRightIcon, CreditCardIcon, DashboardIcon, HandshakeIcon, LessonIcon, LogOutIcon, MessageIcon, MicIcon, SettingsIcon, ShieldIcon, SparklesIcon, UserIcon } from "./icons";
+import { ArrowRightIcon, CreditCardIcon, DashboardIcon, GridIcon, HandshakeIcon, LessonIcon, LogOutIcon, MessageIcon, MicIcon, PencilIcon, SettingsIcon, ShieldIcon, SparklesIcon, UserIcon } from "./icons";
 import { UserAvatar } from "./user-avatar";
 
 type SidebarUser = {
@@ -17,11 +17,14 @@ type SidebarUser = {
   affiliateStatus: AffiliateStatus | null;
   /** Their plan's display name, e.g. "Resident" */
   planName: string;
+  /** Finished edits they haven't opened yet */
+  readyEdits: number;
 };
 
 type Section = { href: string; label: string; icon: ComponentType<SVGProps<SVGSVGElement>> };
 
 const sections: Section[] = [
+  { href: "/account", label: "Overview", icon: GridIcon },
   { href: "/account/courses", label: "My courses", icon: LessonIcon },
   { href: "/account/profile", label: "Profile", icon: UserIcon },
   { href: "/account/settings", label: "Settings", icon: SettingsIcon },
@@ -29,6 +32,7 @@ const sections: Section[] = [
 
 // Admins run the site: they review mixes in the studio and don't join the affiliate program.
 const studentSections: Section[] = [
+  { href: "/account/edits", label: "My edits", icon: PencilIcon },
   { href: "/account/billing", label: "Billing", icon: CreditCardIcon },
   { href: "/account/mixes", label: "Mix feedback", icon: MessageIcon },
   { href: "/account/affiliate", label: "Affiliate program", icon: HandshakeIcon },
@@ -94,9 +98,11 @@ export function AccountSidebar({ user }: { user: SidebarUser }) {
           </Link>
         )}
 
-        <nav aria-label="Account sections" className="no-scrollbar mt-5 -mx-1 flex gap-1 overflow-x-auto px-1 lg:flex-col">
+        <nav aria-label="Account sections" className="no-scrollbar relative mt-5 -mx-1 flex gap-1 overflow-x-auto px-1 lg:flex-col">
           {links.map(({ href, label, icon: Icon }) => {
-            const active = pathname === href;
+            // A request's own page keeps "My edits" lit; Overview only on itself.
+            const active = pathname === href || (href !== "/account" && pathname.startsWith(`${href}/`));
+            const badge = href === "/account/edits" ? user.readyEdits : 0;
             return (
               <Link
                 key={href}
@@ -108,6 +114,12 @@ export function AccountSidebar({ user }: { user: SidebarUser }) {
               >
                 <Icon className="size-[1.125rem]" />
                 {label}
+                {badge > 0 && (
+                  <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-brand px-1.5 text-[0.6875rem] font-semibold text-white">
+                    {badge}
+                    <span className="sr-only"> ready</span>
+                  </span>
+                )}
               </Link>
             );
           })}

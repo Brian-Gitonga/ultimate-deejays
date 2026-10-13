@@ -24,7 +24,7 @@ Supabase dashboard → **SQL Editor** → **New query** → paste the whole file
 | 003 | `20261001120200_avatar_storage.sql` | The profile-photo bucket |
 | 004 | `20261002090000_courses.sql` | Instructors, courses, sections and lessons; `save_course()` |
 | 005 | `20261002090100_blog.sql` | Blog posts (drafts, scheduled, published) |
-| 006 | `20261002090200_challenges.sql` | Challenges and challenge entries |
+| 006 | `20261002090200_challenges.sql` | Challenges and challenge entries (removed again by 015) |
 | 007 | `20261002090300_learning.sql` | Student plans and suspension, enrollments, lesson progress, reviews, mix feedback |
 | 008 | `20261002090400_settings_media.sql` | Site settings and the media library (bucket + table) |
 | 009 | `20261002090500_payments_affiliates.sql` | Payments, payouts, affiliate payouts, referral clicks |
@@ -33,29 +33,33 @@ Supabase dashboard → **SQL Editor** → **New query** → paste the whole file
 | 012 | `20261003090000_course_access.sql` | Lesson videos only for signed-in students whose plan includes the course (`lesson_video()`), "continue where you left off", challenge entries for members only, email preferences, newsletter subscribers |
 | 013 | `20261003090100_checkout_affiliates.sql` | Checkout orders, promo codes, affiliate codes as buyer discounts, `fulfill_checkout()`, the affiliate's own links, payout account and stats |
 | 014 | `20261004090000_store.sql` | The store: downloadable resources and their files, the private `store` bucket, `store_download()` (sign-in, plan, download counts) |
+| 015 | `20261011090000_lower_thirds.sql` | Lower thirds replace challenges: the `store_resources.lower_third` switch (shown on /lower-thirds), and challenges removed (tables, functions, types, their figures in the studio views, the email preference, the media folder and the pricing lines) |
+| 016 | `20261012090000_edits_allowances.sql` | Template edits (request forms on templates, edit requests, messages, the private `edits` bucket), plan allowances (downloads and edits per plan, enforced by `store_download()` and `request_edit()`), phone numbers for texts, coupons limited to certain emails |
+| 017 | `20261012100000_my_downloads.sql` | `my_downloads()`: a member's own recent downloads, listed on Account → Overview |
 
 Migration 011 is large (about 140 KB). Paste it in one go; it runs as a single transaction.
 It skips anything that already exists, so it never overwrites edits made in the studio.
 
 ## First-time setup
 
-1. **Run the migrations above, in order.** Already ran 001–013? Run 014.
+1. **Run the migrations above, in order.** Already ran 001–016? Run 017.
 2. **Run `diagnostics/00_health_check.sql`.** Every row should be ✅.
 3. **Dashboard → Authentication → URL Configuration:**
    - Site URL: `http://localhost:3000`
    - Redirect URLs: add `http://localhost:3000/auth/callback`
    - (When you deploy, add your real domain's `/auth/callback` too.)
 4. **While testing, turn off email confirmation:** Authentication → Sign In / Providers → Email →
-   untick **Confirm email**. Sign-up then goes straight to the profile page. Supabase's built-in
+   untick **Confirm email**. Sign-up then goes straight to the account overview. Supabase's built-in
    email sender only allows a few emails per hour. Turn it back on (with your own SMTP) before launch.
 5. **Sign up on the site**, then run `scripts/make-admin.sql` with your email. Refresh: the
    **Admin studio** button appears in your account.
-6. **Optional: run `scripts/demo-data.sql`** to fill Earnings, the Dashboard, Reviews, Mix feedback,
-   challenge entries and (if an affiliate is approved) affiliate stats with sample activity. Every
+6. **Optional: run `scripts/demo-data.sql`** to fill Earnings, the Dashboard, Reviews, Mix feedback
+   and (if an affiliate is approved) affiliate stats with sample activity. Every
    demo row is marked `is_demo`. `scripts/remove-demo-data.sql` deletes exactly those rows and nothing else.
 7. **Payments:** set up Paystack (next section) to sell plans.
 8. **Optional: run `scripts/demo-store.sql`** to fill /store with 8 sample resources (their files are
    images already in the site, so downloads work straight away). `scripts/remove-demo-data.sql` removes them.
+   `scripts/demo-lower-thirds.sql` does the same for /lower-thirds with 4 sample lower thirds.
 
 ## The store
 
@@ -66,7 +70,7 @@ too, or file by file.
 
 | Piece | What it does |
 | --- | --- |
-| Studio → Store | Add a resource, upload its files or add links, pick the plan and creator, publish |
+| Studio → Store | Add a resource, upload its files or add links, pick the plan and creator, publish. Turn on **Lower third** to list it on /lower-thirds too |
 | `store` bucket (private) | Uploaded files. Nobody reads it directly: downloads get a 60-second signed link |
 | Links | For files hosted elsewhere (Google Drive, Dropbox) or bigger than your upload limit. In a ZIP they become shortcuts |
 | `store_download()` | Checks sign-in, plan and that it's published; logs the download; counts each person once a day |
@@ -74,6 +78,38 @@ too, or file by file.
 
 Upload limit: Supabase's free plan allows **50 MB per file** (Storage → Settings on paid plans). For
 bigger packs, upload a ZIP to Google Drive or Dropbox and add it as a link.
+
+## Template edits
+
+For members without After Effects or Premiere: they ask the team to edit a template, and the edited
+files arrive in their account.
+
+| Piece | What it does |
+| --- | --- |
+| Studio → Store → a template → **Edits** | Turn on **Members can request an edit**, set the turnaround, build the request form (start from the **Lower third** or **Basic** fields, or add text, long text, link, colour, choice and file-upload fields) |
+| The template's page | A **Request an edit** button beside Download opens the form (`/account/edits/new?template=…`) |
+| `request_edit()` | Checks sign-in, that their plan includes the template, their edit allowance and how many requests are waiting, then saves it |
+| Account → My edits | Each request's progress, the conversation with the team, and the finished files to download |
+| Studio → Edit requests | The queue: what they want, their uploads, ask a question, deliver files (uploads or links), decline, private notes |
+| `edits` bucket (private) | `uploads/<member>/…` (files members attach) and `delivered/<request>/…` (edited files). Downloads get a 60-second signed link from `/api/edits/file` |
+| Text messages | Sent when you deliver or ask a question, if the member ticked "Text me". Needs Africa's Talking (below) |
+
+**Text messages (Africa's Talking).** Add `AFRICASTALKING_USERNAME`, `AFRICASTALKING_API_KEY` and
+optionally `AFRICASTALKING_SENDER_ID` to the site's environment (see `.env.example`). Use the username
+`sandbox` to test. Without them nothing is sent; members still see every update in their account.
+
+## Plan allowances
+
+Studio → Settings → Pricing page → each plan → **Allowances**: store downloads and edit requests per
+plan, how many requests can wait at once, and whether they reset **every month** (on the 1st, UTC) or
+count **in total**. Empty = unlimited; admins have no limits. Defaults: Warm-Up 5 downloads and no
+edits; Resident 30 downloads and 3 edits (2 waiting at once); Headliner unlimited (3 waiting at once).
+
+- A download counts once per template per period: downloading the same one again is free.
+- A declined or cancelled edit request gives the edit back.
+- The database enforces them (`store_download()`, `request_edit()`), so they can't be skipped.
+- The pricing table shows them, and members see what they have left in Account → My edits and under
+  the Download button.
 
 ## Payments (Paystack)
 
@@ -136,18 +172,19 @@ own plan, role or status, and only see published content.
 
 | Studio page | Tables |
 | --- | --- |
-| Dashboard | `payments`, `payouts`, `courses`, `enrollments`, `course_reviews`, plus counts from `mix_submissions`, `challenge_entries`, `affiliate_applications` |
+| Dashboard | `payments`, `payouts`, `courses`, `enrollments`, `course_reviews`, plus counts from `mix_submissions`, `affiliate_applications` |
 | Courses | `courses`, `course_sections`, `course_lessons` (saved together by `save_course()`; videos read through `studio_lesson_media()`) |
 | Students | `student_overview` and `enrollment_progress` views; changes `profiles.plan` / `profiles.status` |
 | Instructors | `instructors` |
 | Mix feedback | `mix_submissions` (students send them from `/account/mixes`) |
-| Challenges | `challenges`, `challenge_entries` (from the form on each challenge page) |
 | Reviews | `course_reviews` (students write them on course pages) |
 | Blog | `blog_posts` |
 | Earnings | `payments` (with discount and code), `payouts`; refunds call Paystack |
 | Affiliates | `affiliate_overview` view + `affiliate_accounts` (payout details, requests); changes `affiliate_applications` (status, commission, buyer discount, code), adds `affiliate_payouts` |
-| Coupons | `coupons`, plus `payments` for what each code brought in |
-| Store | `store_resources`, `store_files` (locations via `studio_store_files()`), `store_download_stats` view; uploads to the `store` bucket |
+| Coupons | `coupons` (`emails` = only for those accounts), plus `payments` for what each code brought in |
+| Edit requests | `studio_edit_requests()`, `edit_request_messages`; deliveries upload to the `edits` bucket |
+| Settings → Pricing page | `site_settings`, and `plan_allowances` for each plan's downloads and edits |
+| Store | `store_resources` (`lower_third` = also on /lower-thirds), `store_files` (locations via `studio_store_files()`), `store_download_stats` view; uploads to the `store` bucket |
 | Subscribers | `newsletter_subscribers` (the newsletter form on the site) |
 | Media library | `media_assets` + the `media` storage bucket |
 | Settings | `site_settings` (one row) |
@@ -155,11 +192,10 @@ own plan, role or status, and only see published content.
 | Search | All of the above |
 
 Public pages read the same tables (published rows only). Saving in the studio updates the site
-straight away; anything else (scheduled posts, challenge dates) shows within 5 minutes.
+straight away; anything else (scheduled posts) shows within 5 minutes.
 
 The student side: `lesson_video()` hands out lesson videos and enrolls (`enrollments`, with the last
-lesson for "continue"), `lesson_progress` and `course_reviews` from the player, `challenge_entries`
-from challenge pages, `checkouts` and `payments` (Billing), `profiles.email_prefs` (Settings). The
+lesson for "continue"), `lesson_progress` and `course_reviews` from the player, `checkouts` and `payments` (Billing), `profiles.email_prefs` (Settings). The
 affiliate dashboard: `affiliate_links`, `affiliate_accounts`, `affiliate_payouts` and the
 `my_affiliate_referrals()` / `my_affiliate_signups()` / `my_affiliate_clicks()` functions (first
 name and initial only).
@@ -173,7 +209,7 @@ name and initial only).
 | `02_affiliate_applications.sql` | Affiliate applications, pending first |
 | `03_security.sql` | Policies and column permissions (for "permission denied" / RLS errors) |
 | `04_storage.sql` | Profile photos and media library files |
-| `05_content.sql` | Courses (lessons, figures shown), posts (live or not), challenges (state, entries) |
+| `05_content.sql` | Courses (lessons, figures shown), posts (live or not), lower thirds (status, plan, files, downloads) |
 | `06_students.sql` | Students, course progress, and reviews/mixes waiting on you |
 | `07_payments.sql` | Revenue by month, latest payments, payouts |
 | `08_affiliate_stats.sql` | Clicks, sign-ups, sales, commission and what's owed per affiliate |
@@ -198,6 +234,7 @@ name and initial only).
 | `set-currency-kes.sql` | Switches the store to Kenyan shillings: currency, plan prices, payout minimums |
 | `set-launch-figures.sql` | Your contact details (phone/WhatsApp, location), the student count, and small realistic per-course student numbers; sets made-up ratings and reviews to 0 |
 | `demo-store.sql` | Adds 8 sample store resources (marked `is_demo`; removed by `remove-demo-data.sql`) |
+| `demo-lower-thirds.sql` | Adds 4 sample lower thirds to /lower-thirds (marked `is_demo`; removed by `remove-demo-data.sql`) |
 
 **About "sample figures":** the seeded courses keep their original placeholder numbers (e.g.
 1,284 students, 4.9 stars). Real enrollments and reviews are added on top. `clear-sample-figures.sql`
@@ -213,7 +250,7 @@ Search for that text below.
 | What you see | Run | Likely fix |
 | --- | --- | --- |
 | A page says "Couldn't load courses / blog posts / …: Could not find the table" | `00_health_check.sql` | Run the missing migrations (004–011) |
-| Courses, blog or challenges pages are empty | `05_content.sql` | Run migration 011 (the seed) |
+| Courses or blog pages are empty | `05_content.sql` | Run migration 011 (the seed) |
 | Sign-up says "Database error saving new user" | `00_health_check.sql` | The sign-up trigger failed or is missing. Re-run migration 001 |
 | "…has no profile row" error after logging in | `01_users_and_profiles.sql` | Re-run migration 001. It backfills missing profiles |
 | Log-in says "Confirm your email first" | `01_users_and_profiles.sql` (`email_confirmed`) | Click the email link, or turn off Confirm email (step 4) |
@@ -222,7 +259,7 @@ Search for that text below.
 | "permission denied for table …" | `03_security.sql` (query 2) | Re-run the migration for that table |
 | "new row violates row-level security policy" | `03_security.sql` (query 1) | Someone is writing a row that isn't theirs, or the policy is missing |
 | Studio save says "Only admins can …" | `01_users_and_profiles.sql` (`role`) | Your account isn't an admin: run `scripts/make-admin.sql` |
-| "That's already taken: the slug or code must be unique" | `05_content.sql` | Another course/post/challenge uses that URL. Change it |
+| "That's already taken: the slug or code must be unique" | `05_content.sql` | Another course, post or store resource uses that URL. Change it |
 | Image upload fails in the studio | `04_storage.sql`, `00_health_check.sql` | Re-run migration 008 (media bucket) |
 | Profile photo upload fails | `04_storage.sql`, `00_health_check.sql` | Re-run migration 003 |
 | Student can't send a mix | `06_students.sql` (plan, mixes) | Warm-Up has no mix reviews; Resident has 2. Change their plan in Studio → Students |
@@ -237,7 +274,10 @@ Search for that text below.
 | Checkout: "We couldn't reach the payment page … Currency not supported" | n/a | Studio → Settings → Currency must be one your Paystack account accepts |
 | Paid, but still on "Confirming your payment" | `10_checkout_coupons.sql` | Mobile money can take minutes. Otherwise check the webhook URL and the order's `failure` |
 | Code at checkout: "That code isn't valid" | `10_checkout_coupons.sql` (queries 3–4) | Typo, a switched-off coupon, or an affiliate who isn't approved |
-| Challenge entry: "…are open to Resident and Headliner members" | `06_students.sql` | Warm-Up members can enter Beginner challenges only |
+| A template has no **Request an edit** button | `00_health_check.sql` | Run migration 016, then turn on **Members can request an edit** for it in Studio → Store |
+| Members aren't getting texts | — | Add the Africa's Talking keys (see `.env.example`). The member also has to tick "Text me" and give a number |
+| "You've used all your downloads" | — | Their plan's allowance is used up. Change it in Studio → Settings → Pricing page → Allowances |
+| /lower-thirds is empty but the store has lower thirds | `05_content.sql` (query 3) | Run migration 015, then turn on **Lower third** for each one in Studio → Store and make sure it's **Published** |
 | /store says "New downloads are on the way" but you added some | `12_store.sql` (query 1) | Run migration 014, and make sure each resource is **Published** |
 | Studio → Store: "Could not find the function public.studio_store_files" | `00_health_check.sql` | Run migration 014 |
 | Upload fails: "…bigger than your Supabase upload limit" | n/a | Add the file as a Google Drive/Dropbox link, or raise the limit (paid plans) |

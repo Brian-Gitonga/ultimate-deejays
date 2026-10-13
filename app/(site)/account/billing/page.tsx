@@ -3,6 +3,8 @@ import Link from "next/link";
 import { ArrowRightIcon, CheckIcon, CreditCardIcon, SparklesIcon } from "@/components/icons";
 import { formatMoney } from "@/lib/checkout";
 import { requireViewer } from "@/lib/dal";
+import { allowanceHighlights } from "@/lib/allowances";
+import { getPlanAllowances } from "@/lib/db/allowances";
 import { getSiteSettings } from "@/lib/db/settings";
 import { paymentMethodLabel } from "@/lib/earnings";
 import { createClient } from "@/lib/supabase/server";
@@ -17,11 +19,12 @@ const date = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", 
 export default async function BillingPage() {
   const viewer = await requireViewer("/account/billing");
   const supabase = await createClient();
-  const [settings, payments, pending] = await Promise.all([
+  const [settings, payments, pending, allowances] = await Promise.all([
     getSiteSettings(),
     // RLS: students only ever see their own.
     supabase.from("payments").select("reference, plan, kind, amount, discount, coupon_code, currency, method, source, status, paid_at, refunded_at").eq("user_id", viewer.id).order("paid_at", { ascending: false }),
     supabase.from("checkouts").select("reference, plan, amount, currency, created_at").eq("user_id", viewer.id).eq("status", "pending").gt("created_at", recentCutoff()),
+    getPlanAllowances(),
   ]);
 
   const planName = (slug: string) => settings.plans.find((p) => p.slug === slug)?.name ?? slug;
@@ -52,7 +55,7 @@ export default async function BillingPage() {
         </div>
         {current && (
           <ul className="mt-5 grid gap-2 border-t border-border pt-5 text-sm sm:grid-cols-2">
-            {current.highlights.map((item) => (
+            {[...current.highlights, ...allowanceHighlights(allowances.find((a) => a.plan === viewer.plan))].map((item) => (
               <li key={item} className="flex items-start gap-2 text-foreground/85">
                 <CheckIcon className="mt-0.5 size-4 shrink-0 text-brand" />
                 {item}

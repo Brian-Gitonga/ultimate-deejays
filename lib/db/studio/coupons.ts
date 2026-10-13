@@ -15,6 +15,7 @@ export function toCoupon(row: Tables<"coupons">, totals?: { revenue: number; dis
     discountType: row.discount_type as Coupon["discountType"],
     discountValue: Number(row.discount_value),
     plans: row.plans.filter((p): p is CouponPlan => p === "resident" || p === "headliner"),
+    emails: row.emails ?? [],
     maxRedemptions: row.max_redemptions,
     redemptions: row.redemptions,
     oncePerCustomer: row.once_per_customer,

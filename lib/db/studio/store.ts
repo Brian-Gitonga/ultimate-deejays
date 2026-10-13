@@ -1,4 +1,5 @@
 import "server-only";
+import { parseEditForm } from "@/lib/edits";
 import type { StorePlan, StudioStoreResource } from "@/lib/store";
 import type { Tables } from "@/lib/supabase/database.types";
 import { createClient } from "@/lib/supabase/server";
@@ -26,6 +27,7 @@ function toStudioResource(row: Tables<"store_resources">, files: FileRow[], stat
     thumbnail: row.thumbnail,
     previewUrl: row.preview_url,
     access: row.access_plan as StorePlan,
+    lowerThird: row.lower_third ?? false,
     instructorId: row.instructor_id,
     status: row.status as StudioStoreResource["status"],
     featured: row.featured,
@@ -38,6 +40,10 @@ function toStudioResource(row: Tables<"store_resources">, files: FileRow[], stat
       .filter((f) => f.resource_id === row.id)
       .sort((a, b) => a.position - b.position)
       .map((f) => ({ id: f.id, name: f.name, kind: f.kind as "storage" | "link", path: f.path, url: f.url, size: Number(f.size_bytes), mime: f.mime_type })),
+    // Before migration 016 these columns aren't there yet.
+    editsEnabled: row.edits_enabled ?? false,
+    editTurnaround: row.edit_turnaround ?? "",
+    editForm: parseEditForm(row.edit_form),
   };
 }
 

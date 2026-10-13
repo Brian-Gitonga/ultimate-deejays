@@ -10,7 +10,6 @@ select
   s.plan,
   s.status,
   (select count(*) from public.enrollments e where e.user_id = s.id) as courses,
-  s.challenge_entries,
   s.mixes_submitted,
   s.paid,
   s.created_at as joined,

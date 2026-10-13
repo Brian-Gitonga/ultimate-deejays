@@ -1,14 +1,16 @@
 "use client";
 
 import { useCallback, useId, useRef, useState } from "react";
-import { deleteStoreResource, saveStoreResource } from "@/app/(studio)/studio/store/actions";
+import { deleteStoreResource, discardStoreUploads, saveStoreResource, startR2Upload } from "@/app/(studio)/studio/store/actions";
 import { youtubeId } from "@/lib/curriculum";
-import { formatDownloads, formatSize, planLabel, storagePathFor, storeCategories, categoryName, fileKind, type StudioStoreFile, type StudioStoreResource } from "@/lib/store";
+import { providerOf, storageProviders, type StorageProvider } from "@/lib/storage";
+import { formatDownloads, formatSize, planLabel, resourcePath, storagePathFor, storeCategories, categoryName, fileKind, type StudioStoreFile, type StudioStoreResource } from "@/lib/store";
 import { slugify, type InstructorOption } from "@/lib/studio-courses";
 import { reportStudioError, useServerCollection } from "@/lib/studio-store";
 import { createClient } from "@/lib/supabase/client";
 import { ArrowUpRightIcon, ChevronDownIcon, DownloadIcon, LinkIcon, PencilIcon, PlusIcon, TrashIcon, TrendUpIcon, UsersIcon } from "../icons";
 import { fileIcons, StoreCover } from "../store/store-cover";
+import { EditFormBuilder } from "./edit-form-builder";
 import { ThumbnailPicker } from "./course-fields";
 import { Drawer } from "./drawer";
 import { ConfirmDialog, ManageTable, RowMenu, useToast } from "./manage-table";
@@ -26,6 +28,7 @@ const blank = (): StudioStoreResource => ({
   thumbnail: "",
   previewUrl: "",
   access: "warm-up",
+  lowerThird: false,
   instructorId: null,
   status: "draft",
   featured: false,
@@ -35,6 +38,9 @@ const blank = (): StudioStoreResource => ({
   publishedAt: null,
   updatedAt: new Date().toISOString(),
   files: [],
+  editsEnabled: false,
+  editTurnaround: "",
+  editForm: [],
 });
 
 const totalSize = (r: Pick<StudioStoreResource, "files">) => r.files.reduce((s, f) => s + f.size, 0);
@@ -42,9 +48,10 @@ const totalSize = (r: Pick<StudioStoreResource, "files">) => r.files.reduce((s, 
 /*
  * Studio → Store: the downloads on /store. Add a resource, upload its files
  * (they go straight to the private store bucket) or add links for files
- * hosted elsewhere, pick who can download it, and publish.
+ * hosted elsewhere, pick who can download it, and publish. Turn on "Lower
+ * third" to list it on /lower-thirds as well.
  */
-export function StoreManager({ seed, instructors }: { seed: StudioStoreResource[]; instructors: InstructorOption[] }) {
+export function StoreManager({ seed, instructors, storage }: { seed: StudioStoreResource[]; instructors: InstructorOption[]; /** Storages uploads can go to, preferred first */ storage: StorageProvider[] }) {
   const { items, save, remove } = useServerCollection(seed, { save: saveStoreResource, remove: deleteStoreResource });
   const [editing, setEditing] = useState<StudioStoreResource | null>(null);
   const [deleting, setDeleting] = useState<StudioStoreResource | null>(null);
@@ -77,6 +84,7 @@ export function StoreManager({ seed, instructors }: { seed: StudioStoreResource[
           { key: "all", label: "All", test: () => true },
           { key: "published", label: "Published", test: (r: StudioStoreResource) => r.status === "published" },
           { key: "draft", label: "Drafts", test: (r: StudioStoreResource) => r.status === "draft" },
+          { key: "lower-thirds", label: "Lower thirds", test: (r: StudioStoreResource) => r.lowerThird },
         ]}
         toolbar={
           <button type="button" onClick={() => setEditing(blank())} className={`${primaryButton} h-10`}>
@@ -96,6 +104,7 @@ export function StoreManager({ seed, instructors }: { seed: StudioStoreResource[
                 <span className="min-w-0">
                   <span className="flex items-center gap-2">
                     <span className="truncate font-medium text-foreground">{r.title}</span>
+                    {r.lowerThird && <span className="shrink-0 rounded bg-brand/10 px-1.5 py-0.5 text-[0.6875rem] font-medium text-brand-deep dark:text-brand">Lower third</span>}
                     {r.isDemo && <span className="shrink-0 rounded bg-foreground/[0.07] px-1.5 py-0.5 text-[0.6875rem] font-medium text-foreground/70">Demo</span>}
                   </span>
                   <span className="block truncate text-xs text-muted-foreground">
@@ -138,7 +147,7 @@ export function StoreManager({ seed, instructors }: { seed: StudioStoreResource[
             label={`Actions for ${r.title}`}
             items={[
               { label: "Edit", icon: PencilIcon, onSelect: () => setEditing(r) },
-              r.status === "published" && { label: "View on site", icon: ArrowUpRightIcon, href: `/store/${r.slug}`, external: true },
+              r.status === "published" && { label: "View on site", icon: ArrowUpRightIcon, href: resourcePath(r.slug, r.lowerThird), external: true },
               { label: "Delete", icon: TrashIcon, danger: true, onSelect: () => setDeleting(r) },
             ]}
           />
@@ -151,13 +160,14 @@ export function StoreManager({ seed, instructors }: { seed: StudioStoreResource[
           key={editing.id}
           resource={editing}
           instructors={instructors}
+          storage={storage}
           taken={items.filter((r) => r.id !== editing.id).map((r) => r.slug)}
           onClose={() => setEditing(null)}
           onSave={async (next) => {
             const saved = await save(next);
             if (saved) {
               setEditing(null);
-              show(saved.status === "published" ? `${saved.title} is live in the store` : `${saved.title} saved as a draft`);
+              show(saved.status === "published" ? `${saved.title} is live ${saved.lowerThird ? "on Lower thirds" : "in the store"}` : `${saved.title} saved as a draft`);
             }
             return !!saved;
           }}
@@ -181,15 +191,61 @@ export function StoreManager({ seed, instructors }: { seed: StudioStoreResource[
   );
 }
 
+type Upload = { key: string; name: string; /** 0–1, or null when the storage doesn't report it */ progress: number | null };
+
+const PROVIDER_KEY = "studio-store-storage";
+
+/* Sends one file to R2 through a signed link, reporting progress. Resolves to its path, or null (the error is shown). */
+async function uploadToR2(resourceId: string, file: File, onProgress: (share: number) => void): Promise<string | null> {
+  const start = await startR2Upload({ resourceId, name: file.name, size: file.size }).catch(() => null);
+  if (!start?.ok) {
+    reportStudioError(start?.error ?? `Couldn't start uploading “${file.name}”. Check your connection and try again.`);
+    return null;
+  }
+  const { url, path } = start.record;
+  const ok = await new Promise<boolean>((resolve) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("PUT", url);
+    if (file.type) xhr.setRequestHeader("Content-Type", file.type);
+    xhr.upload.onprogress = (event) => {
+      if (event.lengthComputable) onProgress(event.loaded / event.total);
+    };
+    xhr.onload = () => resolve(xhr.status >= 200 && xhr.status < 300);
+    xhr.onerror = () => resolve(false);
+    xhr.send(file);
+  });
+  if (!ok) {
+    reportStudioError(`Couldn't upload “${file.name}” to Cloudflare R2. If this keeps happening, check that the bucket's CORS policy allows uploads from this site (see .env.example).`);
+    return null;
+  }
+  return path;
+}
+
+/* Sends one file to the Supabase store bucket. Resolves to its path, or null (the error is shown). */
+async function uploadToSupabase(resourceId: string, file: File): Promise<string | null> {
+  const path = storagePathFor(resourceId, file.name);
+  const { error } = await createClient().storage.from("store").upload(path, file, { contentType: file.type || "application/octet-stream", upsert: false });
+  if (!error) return path;
+  const tooBig = /exceeded|too large|payload/i.test(error.message);
+  reportStudioError(
+    tooBig
+      ? `“${file.name}” is bigger than your Supabase upload limit (50 MB on the free plan). Switch “Store uploads in” to Cloudflare R2, or add it as a link.`
+      : `Couldn't upload “${file.name}”: ${error.message}. Check that migration 014 has been run.`,
+  );
+  return null;
+}
+
 function ResourceDrawer({
   resource,
   instructors,
+  storage,
   taken,
   onClose,
   onSave,
 }: {
   resource: StudioStoreResource;
   instructors: InstructorOption[];
+  storage: StorageProvider[];
   taken: string[];
   onClose: () => void;
   onSave: (next: StudioStoreResource) => Promise<boolean>;
@@ -199,7 +255,21 @@ function ResourceDrawer({
   const [draft, setDraft] = useState(resource);
   const [slugTouched, setSlugTouched] = useState(!isNew);
   const [busy, setBusy] = useState(false);
-  const [uploading, setUploading] = useState<string[]>([]);
+  const [uploading, setUploading] = useState<Upload[]>([]);
+  // Where new uploads go: the last choice on this computer, else the first available.
+  const [provider, setProvider] = useState<StorageProvider>(() => {
+    let saved: string | null = null;
+    try {
+      saved = localStorage.getItem(PROVIDER_KEY);
+    } catch {}
+    return storage.find((p) => p === saved) ?? storage[0] ?? "supabase";
+  });
+  const chooseProvider = (next: StorageProvider) => {
+    setProvider(next);
+    try {
+      localStorage.setItem(PROVIDER_KEY, next);
+    } catch {}
+  };
   const [error, setError] = useState("");
   const [linkOpen, setLinkOpen] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -212,7 +282,7 @@ function ResourceDrawer({
   const discardFresh = useCallback((paths: string[]) => {
     if (!paths.length) return;
     paths.forEach((p) => fresh.current.delete(p));
-    createClient().storage.from("store").remove(paths).catch(() => {});
+    discardStoreUploads(paths).catch(() => {});
   }, []);
 
   const close = useCallback(() => {
@@ -223,21 +293,14 @@ function ResourceDrawer({
   async function upload(list: FileList | null) {
     if (!list?.length) return;
     setError("");
-    const supabase = createClient();
+    const into = provider;
     for (const file of Array.from(list)) {
-      setUploading((u) => [...u, file.name]);
-      const path = storagePathFor(draft.id, file.name);
-      const { error: uploadError } = await supabase.storage.from("store").upload(path, file, { contentType: file.type || "application/octet-stream", upsert: false });
-      setUploading((u) => u.filter((n) => n !== file.name));
-      if (uploadError) {
-        const tooBig = /exceeded|too large|payload/i.test(uploadError.message);
-        reportStudioError(
-          tooBig
-            ? `“${file.name}” is bigger than your Supabase upload limit (50 MB on the free plan). Put it on Google Drive or Dropbox and add it as a link instead.`
-            : `Couldn't upload “${file.name}”: ${uploadError.message}. Check that migration 014 has been run.`,
-        );
-        continue;
-      }
+      const key = crypto.randomUUID();
+      const progress = (value: number) => setUploading((u) => u.map((x) => (x.key === key ? { ...x, progress: value } : x)));
+      setUploading((u) => [...u, { key, name: file.name, progress: into === "r2" ? 0 : null }]);
+      const path = into === "r2" ? await uploadToR2(draft.id, file, progress) : await uploadToSupabase(draft.id, file);
+      setUploading((u) => u.filter((x) => x.key !== key));
+      if (!path) continue;
       fresh.current.add(path);
       const added: StudioStoreFile = { id: crypto.randomUUID(), name: file.name, kind: "storage", path, url: "", size: file.size, mime: file.type };
       setDraft((d) => ({ ...d, files: [...d.files, added] }));
@@ -316,7 +379,7 @@ function ResourceDrawer({
           }}
         />
       </Field>
-      <Field label="URL" htmlFor="store-slug" error={slugTaken ? "Another resource already uses this URL." : undefined} hint={draft.slug ? `/store/${draft.slug}` : "Made from the title"}>
+      <Field label="URL" htmlFor="store-slug" error={slugTaken ? "Another resource already uses this URL." : undefined} hint={draft.slug ? resourcePath(draft.slug, draft.lowerThird) : "Made from the title"}>
         <Input
           id="store-slug"
           value={draft.slug}
@@ -381,6 +444,11 @@ function ResourceDrawer({
                     onChange={(e) => setDraft((d) => ({ ...d, files: d.files.map((f) => (f.id === file.id ? { ...f, name: e.target.value } : f)) }))}
                     className="min-w-0 flex-1 rounded-md bg-transparent px-1.5 py-1 text-sm text-foreground outline-none focus:bg-muted"
                   />
+                  {file.kind === "storage" && (
+                    <span title={`Stored in ${storageProviders[providerOf(file.path)].name}`} className="shrink-0 rounded bg-foreground/[0.06] px-1.5 py-0.5 text-[0.6875rem] font-medium text-muted-foreground">
+                      {storageProviders[providerOf(file.path)].short}
+                    </span>
+                  )}
                   <span className="shrink-0 text-xs text-muted-foreground tabular-nums">{file.kind === "link" ? "Link" : formatSize(file.size)}</span>
                   <span className="flex shrink-0">
                     <button type="button" disabled={i === 0} onClick={() => move(i, -1)} aria-label={`Move ${file.name} up`} className="flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-foreground/5 disabled:opacity-30">
@@ -401,10 +469,25 @@ function ResourceDrawer({
 
         {uploading.length > 0 && (
           <ul className="mt-2 space-y-1 text-sm text-muted-foreground" aria-live="polite">
-            {uploading.map((name) => (
-              <li key={name} className="flex items-center gap-2">
-                <span aria-hidden="true" className="size-3.5 animate-spin rounded-full border-2 border-foreground/20 border-t-brand" />
-                Uploading {name}…
+            {uploading.map((u) => (
+              <li key={u.key}>
+                <span className="flex items-center gap-2">
+                  <span aria-hidden="true" className="size-3.5 shrink-0 animate-spin rounded-full border-2 border-foreground/20 border-t-brand motion-reduce:animate-none" />
+                  <span className="min-w-0 flex-1 truncate">Uploading {u.name}…</span>
+                  {u.progress !== null && <span className="shrink-0 tabular-nums">{Math.round(u.progress * 100)}%</span>}
+                </span>
+                {u.progress !== null && (
+                  <span
+                    role="progressbar"
+                    aria-label={`Uploading ${u.name}`}
+                    aria-valuenow={Math.round(u.progress * 100)}
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    className="mt-1 block h-1 overflow-hidden rounded-full bg-foreground/[0.07]"
+                  >
+                    <span className="block h-full rounded-full bg-brand transition-[width]" style={{ width: `${u.progress * 100}%` }} />
+                  </span>
+                )}
               </li>
             ))}
           </ul>
@@ -427,7 +510,24 @@ function ResourceDrawer({
             }}
           />
         )}
-        <p className="mt-2 text-xs text-muted-foreground">Uploads go to your private store bucket (50 MB per file on Supabase&apos;s free plan). For bigger packs, add a Google Drive or Dropbox link.</p>
+        <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1.5">
+          <label htmlFor="store-provider" className="text-xs font-medium text-foreground">
+            Store uploads in
+          </label>
+          <div className="w-48">
+            <Select id="store-provider" value={provider} onChange={(e) => chooseProvider(e.target.value as StorageProvider)} className="h-9 text-sm">
+              {storage.map((p) => (
+                <option key={p} value={p}>
+                  {storageProviders[p].name}
+                </option>
+              ))}
+            </Select>
+          </div>
+        </div>
+        <p className="mt-1.5 text-xs text-muted-foreground">
+          {storageProviders[provider].hint} Files already added stay where they are.
+          {!storage.includes("r2") && " To use Cloudflare R2, add its keys to .env (see .env.example)."}
+        </p>
       </section>
 
       <Field label="Thumbnail" htmlFor="store-thumb" hint="16:9 works best, like a video thumbnail. Without one, the store draws a cover from the category.">
@@ -439,6 +539,14 @@ function ResourceDrawer({
       <Field label="Description" htmlFor="store-description" hint="What's inside and how to use it.">
         <Textarea id="store-description" rows={6} maxLength={5000} value={draft.description} onChange={(e) => set("description", e.target.value)} />
       </Field>
+      <Switch
+        id="store-lower-third"
+        label="Lower third"
+        hint="Lists it on the Lower thirds page too, where its page moves to /lower-thirds."
+        checked={draft.lowerThird}
+        onChange={(on) => set("lowerThird", on)}
+      />
+      <EditFormBuilder value={draft} onChange={(patch) => setDraft((d) => ({ ...d, ...patch }))} />
       <Switch id="store-featured" label="Featured" hint="Pinned to the front of the store with a Featured badge." checked={draft.featured} onChange={(on) => set("featured", on)} />
     </Drawer>
   );

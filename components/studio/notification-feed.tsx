@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useState, type ComponentType, type SVGProps } from "react";
 import { markNotificationsRead } from "@/app/(studio)/studio/notifications/actions";
 import type { Activity, ActivityKind } from "@/lib/db/studio/activity";
-import { HandshakeIcon, MessageIcon, RefundIcon, StarIcon, TrophyIcon, UsersIcon, WalletIcon } from "../icons";
+import { HandshakeIcon, MessageIcon, RefundIcon, SlidersIcon, StarIcon, UsersIcon, WalletIcon } from "../icons";
 import { Panel } from "./ui";
 
 const kinds: Record<ActivityKind, { icon: ComponentType<SVGProps<SVGSVGElement>>; tone: string; label: string }> = {
@@ -12,9 +12,9 @@ const kinds: Record<ActivityKind, { icon: ComponentType<SVGProps<SVGSVGElement>>
   affiliate: { icon: HandshakeIcon, tone: "bg-accent-indigo/10 text-accent-indigo", label: "Affiliate application" },
   payment: { icon: WalletIcon, tone: "bg-brand/10 text-brand-deep dark:text-brand", label: "Payment" },
   refund: { icon: RefundIcon, tone: "bg-red-500/10 text-red-600 dark:text-red-400", label: "Refund" },
-  entry: { icon: TrophyIcon, tone: "bg-accent-amber/15 text-[#b37400] dark:text-accent-amber", label: "Challenge entry" },
   review: { icon: StarIcon, tone: "bg-accent-amber/15 text-[#b37400] dark:text-accent-amber", label: "Review" },
   mix: { icon: MessageIcon, tone: "bg-foreground/[0.07] text-foreground", label: "Mix for feedback" },
+  edit: { icon: SlidersIcon, tone: "bg-brand/10 text-brand-deep dark:text-brand", label: "Edit request" },
 };
 
 const dayFormat = new Intl.DateTimeFormat("en-US", { weekday: "long", month: "long", day: "numeric" });

@@ -2,10 +2,11 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { cache } from "react";
-import { CatalogProvider, CatalogResults } from "@/components/course-catalog";
+import { CatalogLayout, CatalogProvider, CatalogResults, courseTileSizes } from "@/components/course-catalog";
 import {
   ActiveFilters,
   CatalogPagination,
+  CatalogSearch,
   ClearFiltersLink,
   FiltersButton,
   ResultCount,
@@ -14,6 +15,7 @@ import {
 } from "@/components/course-catalog-controls";
 import { CourseCard } from "@/components/course-card";
 import { CourseFilterPanel } from "@/components/course-filter-panel";
+import { CourseTile } from "@/components/course-tile";
 import { ChevronRightIcon, HomeIcon, SearchIcon } from "@/components/icons";
 import {
   canonicalCoursesHref,
@@ -103,63 +105,70 @@ export default async function CoursesPage({ searchParams }: PageProps<"/courses"
   const start = (result.page - 1) * result.pageSize;
 
   return (
-    <main className="flex-1">
+    // Wide: the catalogue uses the whole screen, like /store (see data-layout in globals.css).
+    <main className="flex-1" data-layout="wide">
       <StructuredData filters={filters} result={result} start={start} />
 
       <CatalogProvider filters={filters} total={result.total} pageCount={result.pageCount}>
         <div className="site-container pt-6 pb-20 sm:pt-10 lg:pb-28">
-          <div className="grid grid-cols-1 items-start gap-8 lg:grid-cols-[17rem_minmax(0,1fr)] xl:grid-cols-[18.5rem_minmax(0,1fr)] xl:gap-10">
+          <nav aria-label="Breadcrumb" className="mb-3">
+            <ol className="flex flex-wrap items-center gap-1.5 text-sm text-muted-foreground">
+              <li>
+                <Link href="/" className="flex items-center text-foreground transition hover:text-brand">
+                  <HomeIcon className="size-4" />
+                  <span className="sr-only">Home</span>
+                </Link>
+              </li>
+              <Crumb href={topic ? "/courses" : undefined}>Courses</Crumb>
+              {topic?.parent && <Crumb href={`/courses?category=${topic.parent.slug}`}>{topic.parent.name}</Crumb>}
+              {topic && <Crumb>{topic.topic.name}</Crumb>}
+            </ol>
+          </nav>
+          <div className="max-w-2xl">
+            <h1 id="catalog-title" className="text-[1.75rem] leading-tight font-bold tracking-tight text-balance text-foreground sm:text-[2rem]">
+              {heading}
+            </h1>
+            <p className="mt-2 text-base text-pretty text-muted-foreground">{intro}</p>
+          </div>
+
+          <CatalogLayout>
             <CourseFilterPanel facets={result.facets} />
 
             <section id="catalog" aria-labelledby="catalog-title" className="min-w-0 scroll-mt-28">
-              <nav aria-label="Breadcrumb">
-                <ol className="flex flex-wrap items-center gap-1.5 text-sm text-muted-foreground">
-                  <li>
-                    <Link href="/" className="flex items-center text-foreground transition hover:text-brand">
-                      <HomeIcon className="size-4" />
-                      <span className="sr-only">Home</span>
-                    </Link>
-                  </li>
-                  <Crumb href={topic ? "/courses" : undefined}>Courses</Crumb>
-                  {topic?.parent && <Crumb href={`/courses?category=${topic.parent.slug}`}>{topic.parent.name}</Crumb>}
-                  {topic && <Crumb>{topic.topic.name}</Crumb>}
-                </ol>
-              </nav>
-
-              <div className="mt-3 flex flex-wrap items-end justify-between gap-x-6 gap-y-4">
-                <div className="max-w-[38.75rem] min-w-0">
-                  <h1
-                    id="catalog-title"
-                    className="text-[1.75rem] leading-tight font-bold tracking-tight text-balance text-foreground sm:text-[2rem]"
-                  >
-                    {heading}
-                  </h1>
-                  <p className="mt-2 text-base text-pretty text-muted-foreground">{intro}</p>
-                </div>
-                <div className="flex items-center gap-2">
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between lg:gap-6">
+                <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
                   <FiltersButton />
+                  <CatalogSearch />
+                </div>
+                <div className="flex shrink-0 flex-wrap items-center justify-between gap-x-4 gap-y-1 sm:justify-end lg:h-11">
                   <SortSelect />
                   <ViewToggle />
                 </div>
               </div>
 
-              <div className="mt-6 flex flex-wrap items-center gap-x-4 gap-y-3 border-t border-border pt-4">
+              <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-2">
                 <ResultCount />
                 <ActiveFilters />
               </div>
 
               {result.items.length > 0 ? (
                 <>
-                  <div className="mt-6">
+                  <div className="mt-3">
                     <CatalogResults>
                       {result.items.map((course, i) => (
                         <li key={course.slug}>
-                          <CourseCard
-                            course={course}
-                            headingLevel="h2"
-                            priority={i < 3}
-                            sizes="(min-width: 1280px) 310px, (min-width: 640px) 46vw, 92vw"
-                          />
+                          {/* Grid shows covers like the store's, list the detailed rows. Both are here so switching is instant. */}
+                          <div className="view-list:hidden">
+                            <CourseTile course={course} headingLevel="h2" priority={filters.view === "grid" && i < 3} sizes={courseTileSizes} />
+                          </div>
+                          <div className="hidden view-list:block">
+                            <CourseCard
+                              course={course}
+                              headingLevel="h2"
+                              priority={filters.view === "list" && i < 3}
+                              sizes="(min-width: 1024px) 280px, (min-width: 640px) 240px, 104px"
+                            />
+                          </div>
                         </li>
                       ))}
                     </CatalogResults>
@@ -167,7 +176,7 @@ export default async function CoursesPage({ searchParams }: PageProps<"/courses"
                   <CatalogPagination page={result.page} pageSize={result.pageSize} shown={result.items.length} />
                 </>
               ) : (
-                <div className="mt-6 flex flex-col items-center rounded-2xl border border-dashed border-border px-6 py-16 text-center">
+                <div className="mt-3 flex flex-col items-center rounded-xl border border-dashed border-border px-6 py-16 text-center">
                   <span className="flex size-12 items-center justify-center rounded-full bg-brand/10 text-brand">
                     <SearchIcon className="size-5" />
                   </span>
@@ -179,7 +188,7 @@ export default async function CoursesPage({ searchParams }: PageProps<"/courses"
                 </div>
               )}
             </section>
-          </div>
+          </CatalogLayout>
         </div>
       </CatalogProvider>
     </main>

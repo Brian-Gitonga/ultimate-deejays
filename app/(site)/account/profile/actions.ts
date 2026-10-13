@@ -66,6 +66,8 @@ export async function saveProfile(formData: FormData): Promise<SaveProfileResult
       instagram: input.instagram,
       soundcloud: input.soundcloud,
       ...(avatarUrl && { avatar_url: avatarUrl }),
+      // Only when it changed, so profiles still save before migration 016 adds the column.
+      ...(input.phone !== viewer.profile.phone && { phone: input.phone }),
     })
     .eq("id", viewer.id)
     .select("id")

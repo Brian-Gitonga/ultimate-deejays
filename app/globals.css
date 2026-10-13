@@ -5,6 +5,8 @@
 
 /* Course cards switch to their horizontal layout inside a [data-view="list"] container. */
 @custom-variant view-list (&:where([data-view="list"] *));
+/* A mouse or trackpad that can hover. Touch screens don't match, so hover-only details show there by default. */
+@custom-variant can-hover (@media (hover: hover) and (pointer: fine));
 
 :root {
   --background: #ffffff;
@@ -99,6 +101,49 @@
 @theme {
   --animate-float: float 6s ease-in-out infinite;
   --animate-eq: eq 1.1s ease-in-out infinite;
+  /*
+   * The /lower-thirds example frame: when a style is picked, its plates wipe
+   * on from the left and the words follow, the way a lower third comes on air.
+   * Played once per pick, never on load or on a loop.
+   */
+  --animate-lt-in: lt-in 0.42s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  --animate-lt-text: lt-text 0.36s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  /* Dialogs (the upgrade prompt): the backdrop fades in, the panel rises a little. */
+  --animate-fade-in: fade-in 0.15s ease-out both;
+  --animate-dialog-in: dialog-in 0.22s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+    }
+  }
+
+  @keyframes dialog-in {
+    from {
+      opacity: 0;
+      transform: translateY(0.75rem);
+    }
+  }
+
+  @keyframes lt-in {
+    from {
+      clip-path: inset(0 100% 0 0);
+    }
+    to {
+      clip-path: inset(0 0 0 0);
+    }
+  }
+
+  @keyframes lt-text {
+    from {
+      opacity: 0;
+      transform: translateX(-0.4em);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
 
   @keyframes float {
     0%,
@@ -144,12 +189,12 @@ html {
 
 /*
  * The page frame, following the common max-width-plus-gutter pattern: content
- * never exceeds 80rem, and the side margin grows with the screen
+ * never exceeds 84rem, and the side margin grows with the screen
  * (20px on phones, 24px on tablets, 32px on desktops, scaled with the root size).
  */
 @utility site-container {
   width: 100%;
-  max-width: 84rem;
+  max-width: var(--site-max, 84rem);
   margin-inline: auto;
   padding-inline: 1.25rem;
 
@@ -160,6 +205,17 @@ html {
   @media (width >= 64rem) {
     padding-inline: 2rem;
   }
+}
+
+/*
+ * Catalogue pages (/store, /lower-thirds) use the whole screen, the way big
+ * template libraries do, so the covers can be big. Their <main> carries
+ * data-layout="wide", and every container on the page (header, content and
+ * footer) widens with it, so the logo stays lined up with the grid. The cap
+ * keeps ultra-wide monitors from stretching it further.
+ */
+:root:has(main[data-layout="wide"]) {
+  --site-max: 160rem;
 }
 
 body {

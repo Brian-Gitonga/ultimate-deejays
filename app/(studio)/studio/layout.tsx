@@ -5,6 +5,7 @@ import { StudioShell, type StudioCounts } from "@/components/studio-shell";
 import { displayName, requireAdmin } from "@/lib/dal";
 import { getSiteSettings } from "@/lib/db/settings";
 import { getUnreadCount } from "@/lib/db/studio/activity";
+import { countNewEditRequests } from "@/lib/db/studio/edits";
 import { createClient } from "@/lib/supabase/server";
 
 // The studio is private: never index it.
@@ -18,14 +19,15 @@ export default async function StudioLayout({ children }: { children: ReactNode }
   const admin = await requireAdmin();
   const supabase = await createClient();
   const head = { count: "exact" as const, head: true };
-  const [affiliates, mixes, reviews, notifications, settings] = await Promise.all([
+  const [affiliates, mixes, reviews, edits, notifications, settings] = await Promise.all([
     supabase.from("affiliate_applications").select("user_id", head).eq("status", "pending"),
     supabase.from("mix_submissions").select("id", head).eq("status", "pending"),
     supabase.from("course_reviews").select("id", head).eq("status", "published").eq("reply", ""),
+    countNewEditRequests(supabase),
     getUnreadCount(admin.id, supabase),
     getSiteSettings(),
   ]);
-  const counts: StudioCounts = { affiliates: affiliates.count ?? 0, mixes: mixes.count ?? 0, reviews: reviews.count ?? 0, notifications };
+  const counts: StudioCounts = { affiliates: affiliates.count ?? 0, mixes: mixes.count ?? 0, reviews: reviews.count ?? 0, edits, notifications };
 
   return (
     <StudioShell admin={{ name: displayName(admin), image: admin.profile.avatarUrl }} counts={counts}>

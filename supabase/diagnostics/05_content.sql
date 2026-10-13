@@ -1,5 +1,5 @@
 -- ─────────────────────────────────────────────────────────────────────────────
--- Content: courses, blog posts and challenges at a glance. Read-only.
+-- Content: courses, blog posts and lower thirds at a glance. Read-only.
 -- Run each query on its own (select it, then Run), or all for the last one.
 --
 -- A published course with 0 lessons shows an empty player on the site.
@@ -41,18 +41,15 @@ from public.blog_posts p
 left join public.instructors i on i.id = p.author_id
 order by p.publish_at desc;
 
--- 3. Challenges with their state and entries
+-- 3. Lower thirds (store resources with the lower-third switch on, listed on /lower-thirds)
 select
-  case when not c.published then 'draft'
-       when current_date < c.opens then 'upcoming'
-       when current_date > c.closes then 'ended'
-       else 'live' end as state,
-  c.title,
-  c.slug,
-  c.opens,
-  c.closes,
-  c.entry_count as real_entries,
-  c.sample_entries + c.entry_count as entries_shown,
-  jsonb_array_length(coalesce(c.winners, '[]')) as winners
-from public.challenges c
-order by c.opens desc;
+  r.status,
+  r.title,
+  '/lower-thirds/' || r.slug as page,
+  r.access_plan as who_can_download,
+  r.download_count as downloads,
+  (select count(*) from public.store_files f where f.resource_id = r.id) as files,
+  r.published_at
+from public.store_resources r
+where r.lower_third
+order by r.published_at desc nulls first;
