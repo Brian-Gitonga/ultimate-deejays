@@ -92,7 +92,7 @@ function redirectKeepingCookies(url: URL, from: NextResponse) {
 
 export const config = {
   matcher: [
-    // Everything except static files, images, metadata files and webhooks (which have no session).
-    "/((?!_next/static|_next/image|api/webhooks|favicon.ico|robots.txt|sitemap.xml|.*\\.(?:svg|png|jpg|jpeg|gif|webp|avif|ico)$).*)",
+    // Everything except static files, images, metadata files, webhooks and cron jobs (which have no session).
+    "/((?!_next/static|_next/image|api/webhooks|api/cron|favicon.ico|robots.txt|sitemap.xml|.*\\.(?:svg|png|jpg|jpeg|gif|webp|avif|ico)$).*)",
   ],
 };

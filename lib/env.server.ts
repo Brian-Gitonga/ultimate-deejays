@@ -8,6 +8,10 @@ export const supabaseAdminEnv = envGroup(z.object({ SUPABASE_SECRET_KEY: z.strin
   SUPABASE_SECRET_KEY: process.env.SUPABASE_SECRET_KEY,
 }));
 
+export const cronEnv = envGroup(z.object({ CRON_SECRET: z.string().min(16) }), () => ({
+  CRON_SECRET: process.env.CRON_SECRET,
+}));
+
 export const paystackEnv = envGroup(z.object({ PAYSTACK_SECRET_KEY: z.string().startsWith("sk_") }), () => ({
   PAYSTACK_SECRET_KEY: process.env.PAYSTACK_SECRET_KEY,
 }));
