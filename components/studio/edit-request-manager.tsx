@@ -3,13 +3,14 @@
 import Link from "next/link";
 import { useCallback, useId, useRef, useState } from "react";
 import { updateEditRequest, type EditUpdate } from "@/app/(studio)/studio/edits/actions";
-import { deliveredPathFor, editFileHref, type EditFile, type StudioEditRequest } from "@/lib/edits";
+import { deliveredPathFor, editFileHref, memberMessage, smsHref, whatsappHref, type EditFile, type StudioEditRequest } from "@/lib/edits";
 import { formatPhone } from "@/lib/phone";
+import { siteName, siteUrl } from "@/lib/site";
 import { formatSize, planLabel, resourcePath } from "@/lib/store";
 import { reportStudioError, runAction } from "@/lib/studio-store";
 import { createClient } from "@/lib/supabase/client";
 import { EditStatusChip } from "../edits/edit-status";
-import { ArrowUpRightIcon, CheckIcon, LinkIcon, MessageIcon, PhoneIcon, PlusIcon, SlidersIcon, TrashIcon, UsersIcon, WhatsappIcon } from "../icons";
+import { ArrowUpRightIcon, CheckIcon, CopyIcon, LinkIcon, MessageIcon, PhoneIcon, PlusIcon, SlidersIcon, TrashIcon, UsersIcon, WhatsappIcon } from "../icons";
 import { StoreCover } from "../store/store-cover";
 import { Drawer } from "./drawer";
 import { ManageTable, useToast } from "./manage-table";
@@ -23,7 +24,7 @@ const when = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", 
  * Open one to see what they want, ask a question, deliver the edited files
  * (uploaded to the private edits bucket, or links) or decline it.
  */
-export function EditRequestManager({ seed, smsReady, initialId }: { seed: StudioEditRequest[]; smsReady: boolean; initialId?: string }) {
+export function EditRequestManager({ seed, initialId }: { seed: StudioEditRequest[]; initialId?: string }) {
   const [items, setItems] = useState(seed);
   const [seen, setSeen] = useState(seed);
   if (seed !== seen) {
@@ -43,7 +44,7 @@ export function EditRequestManager({ seed, smsReady, initialId }: { seed: Studio
         <Kpi icon={SlidersIcon} label="New" value={count((r) => r.status === "submitted")} note="Waiting for you to start" />
         <Kpi icon={SlidersIcon} label="In progress" value={count((r) => r.status === "in_progress")} note="Being edited" />
         <Kpi icon={MessageIcon} label="Waiting for members" value={count((r) => r.status === "needs_info")} note="You asked a question" />
-        <Kpi icon={CheckIcon} label="Delivered this month" value={count((r) => r.status === "delivered" && (r.deliveredAt ?? "").startsWith(month))} note={smsReady ? "Members are texted when it's ready" : "Texts are off (see below)"} />
+        <Kpi icon={CheckIcon} label="Delivered this month" value={count((r) => r.status === "delivered" && (r.deliveredAt ?? "").startsWith(month))} note="Message each member yourself from their request" />
       </ul>
 
       <ManageTable
@@ -106,18 +107,10 @@ export function EditRequestManager({ seed, smsReady, initialId }: { seed: Studio
         }
       />
 
-      {!smsReady && (
-        <p className="rounded-xl border border-dashed border-border px-4 py-3 text-sm text-muted-foreground">
-          Text messages are off. To text members when an edit is ready, add <code className="text-xs">AFRICASTALKING_USERNAME</code> and{" "}
-          <code className="text-xs">AFRICASTALKING_API_KEY</code> to the site&apos;s environment (see .env.example). Members still see every update in their account.
-        </p>
-      )}
-
       {open && (
         <RequestDrawer
           key={open.id}
           request={open}
-          smsReady={smsReady}
           onClose={() => setOpenId(null)}
           onSaved={(next, label) => {
             setItems((list) => list.map((r) => (r.id === next.id ? next : r)));
@@ -132,12 +125,10 @@ export function EditRequestManager({ seed, smsReady, initialId }: { seed: Studio
 
 function RequestDrawer({
   request: r,
-  smsReady,
   onClose,
   onSaved,
 }: {
   request: StudioEditRequest;
-  smsReady: boolean;
   onClose: () => void;
   onSaved: (next: StudioEditRequest, label: string) => void;
 }) {
@@ -154,14 +145,6 @@ function RequestDrawer({
   // Uploads made in this drawer: removed again if it's closed without saving.
   const fresh = useRef(new Set<string>());
   const closed = r.status === "declined" || r.status === "cancelled";
-  // The number they gave is always shown: the team may want to call or WhatsApp them.
-  const texts = !r.phone
-    ? "No phone number given."
-    : r.textMe
-      ? smsReady
-        ? "They'll get a text when it's delivered."
-        : "They asked for a text, but texts are off."
-      : "They didn't ask for texts.";
 
   const discardFresh = useCallback((paths: string[]) => {
     if (!paths.length) return;
@@ -259,23 +242,13 @@ function RequestDrawer({
             {r.member.name} <span className="font-normal text-muted-foreground">· {planLabel(r.member.plan)} plan</span>
           </p>
           <p className="truncate text-muted-foreground">{r.member.email}</p>
-          {r.phone && (
-            <p className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
-              <span className="font-medium text-foreground tabular-nums">{formatPhone(r.phone)}</span>
-              <a href={`tel:${r.phone}`} className="inline-flex items-center gap-1 text-xs font-medium text-brand hover:underline">
-                <PhoneIcon className="size-3.5" /> Call
-              </a>
-              <a href={`https://wa.me/${r.phone.replace(/D/g, "")}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs font-medium text-brand hover:underline">
-                <WhatsappIcon className="size-3.5" /> WhatsApp
-              </a>
-            </p>
-          )}
-          <p className="mt-1 text-xs text-muted-foreground">{texts}</p>
         </div>
         <Link href={`/studio/students?q=${encodeURIComponent(r.member.email)}`} className="shrink-0 text-xs font-medium text-brand hover:underline">
           Student
         </Link>
       </section>
+
+      <ContactMember request={r} />
 
       <section aria-labelledby={`${titleId}-answers`}>
         <h3 id={`${titleId}-answers`} className="text-sm font-medium text-foreground">
@@ -420,7 +393,7 @@ function RequestDrawer({
             </button>
           )}
         </div>
-        <p className="mt-2 text-xs text-muted-foreground">Asking a question waits for their answer{r.textMe && r.phone && smsReady ? " and texts them" : ""}. Declining needs a reason and gives them the edit back.</p>
+        <p className="mt-2 text-xs text-muted-foreground">Asking a question waits for their answer: message them so they know to look. Declining needs a reason and gives them the edit back.</p>
       </section>
 
       <div className="flex flex-wrap gap-2">
@@ -464,5 +437,67 @@ function LinkForm({ onAdd }: { onAdd: (file: EditFile) => void }) {
         <ArrowUpRightIcon className="size-4" /> Add link
       </button>
     </div>
+  );
+}
+
+/*
+ * The member's number, and one tap to message them from your own phone or
+ * WhatsApp (nothing is texted automatically). The message is written for
+ * where the request is: ready, a question, or a hello.
+ */
+function ContactMember({ request: r }: { request: StudioEditRequest }) {
+  const [copied, setCopied] = useState<"number" | "message" | null>(null);
+  const message = memberMessage(r, r.member.name.trim().split(/\s+/)[0] ?? "", siteUrl, siteName);
+  const heading = r.status === "delivered" ? "Let them know it's ready" : r.status === "needs_info" ? "Let them know you asked a question" : "Contact them";
+  const urgent = r.status === "delivered" || r.status === "needs_info";
+
+  async function copy(what: "number" | "message", text: string) {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(what);
+      setTimeout(() => setCopied((c) => (c === what ? null : c)), 2000);
+    } catch {
+      reportStudioError("Couldn't copy. Select the text and copy it yourself.");
+    }
+  }
+
+  if (!r.phone) {
+    return (
+      <section aria-label="Contact" className="rounded-xl border border-dashed border-border p-3 text-sm text-muted-foreground">
+        No phone number on this request. Reply in the conversation below, or email {r.member.email}.
+      </section>
+    );
+  }
+
+  const button = "inline-flex h-9 items-center justify-center gap-1.5 rounded-lg px-3 text-sm font-semibold transition";
+  return (
+    <section aria-label="Contact" className={`rounded-xl border p-3 ${urgent ? "border-brand/40 bg-brand/[0.05]" : "border-border"}`}>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-sm font-semibold text-foreground">{heading}</p>
+        <span className="flex items-center gap-2">
+          <span className="text-sm font-semibold text-foreground tabular-nums select-all">{formatPhone(r.phone)}</span>
+          <button type="button" onClick={() => copy("number", r.phone)} aria-label="Copy number" title="Copy number" className="flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-foreground/5 hover:text-foreground">
+            {copied === "number" ? <CheckIcon className="size-4 text-brand" /> : <CopyIcon className="size-4" />}
+          </button>
+        </span>
+      </div>
+      <p className="mt-2 rounded-lg bg-background px-3 py-2 text-sm whitespace-pre-line text-foreground/90 dark:bg-black/20">{message}</p>
+      <div className="mt-2.5 flex flex-wrap gap-2">
+        <a href={whatsappHref(r.phone, message)} target="_blank" rel="noreferrer" className={`${button} bg-[#25d366] text-[#0b3d1f] hover:brightness-105`}>
+          <WhatsappIcon className="size-4" /> WhatsApp
+        </a>
+        <a href={smsHref(r.phone, message)} className={`${button} border border-border bg-background text-foreground hover:bg-foreground/5`}>
+          <MessageIcon className="size-4" /> SMS
+        </a>
+        <a href={`tel:${r.phone}`} className={`${button} border border-border bg-background text-foreground hover:bg-foreground/5`}>
+          <PhoneIcon className="size-4" /> Call
+        </a>
+        <button type="button" onClick={() => copy("message", message)} className={`${button} text-muted-foreground hover:bg-foreground/5 hover:text-foreground`}>
+          {copied === "message" ? <CheckIcon className="size-4 text-brand" /> : <CopyIcon className="size-4" />}
+          {copied === "message" ? "Copied" : "Copy message"}
+        </button>
+      </div>
+      <p className="mt-2 text-xs text-muted-foreground">Opens WhatsApp or your phone with the message filled in, so it goes from your own number.</p>
+    </section>
   );
 }

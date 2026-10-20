@@ -4,7 +4,7 @@
  * codes too, but they live with the affiliate (Studio → Affiliates).
  */
 
-export type CouponPlan = "resident" | "headliner";
+export type CouponPlan = "resident" | "headliner" | "lifetime";
 
 export type Coupon = {
   id: string;

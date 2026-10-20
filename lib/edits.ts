@@ -2,10 +2,13 @@
  * Template edits (migration 016). A store template can offer edits: the
  * team sets up its request form in Studio → Store, members fill it in from
  * the template's page, and the team delivers the edited files to the
- * member's account (Account → My edits) and texts them when it's ready.
+ * member's account (Account → My edits). The team lets them know itself, on
+ * WhatsApp or by SMS, from the number on the request.
  */
 
 // ── The request form ───────────────────────────────────────────────────────
+
+import type { PlanSlug } from "./plan-tiers";
 
 export type EditFieldType = "text" | "textarea" | "url" | "color" | "select" | "file";
 
@@ -225,7 +228,7 @@ export type EditRequest = {
 };
 
 export type StudioEditRequest = EditRequest & {
-  member: { id: string; name: string; email: string; plan: "warm-up" | "resident" | "headliner" };
+  member: { id: string; name: string; email: string; plan: PlanSlug };
   adminNotes: string;
   isDemo: boolean;
 };
@@ -237,3 +240,20 @@ export const deliveredPathFor = (requestId: string, fileName: string) => `delive
 
 /** Link to a file of a request (an upload or a delivered file), signed after checking who's asking. */
 export const editFileHref = (requestId: string, path: string) => `/api/edits/file?${new URLSearchParams({ request: requestId, path })}`;
+
+/**
+ * What the team sends a member about their request, by WhatsApp or SMS from
+ * the studio: ready, a question, or just a hello while it's in the works.
+ */
+export function memberMessage(r: Pick<EditRequest, "id" | "status" | "resource">, firstName: string, siteUrl: string, siteName: string) {
+  const hi = firstName ? `Hi ${firstName}` : "Hi";
+  const title = r.resource.title || "your template";
+  const link = `${siteUrl}/account/edits/${r.id}`;
+  if (r.status === "delivered") return `${hi}, your edit of "${title}" is ready. Download it from your ${siteName} account: ${link}`;
+  if (r.status === "needs_info") return `${hi}, we have a quick question about your edit of "${title}". You can answer here: ${link}`;
+  return `${hi}, this is ${siteName} about your edit of "${title}". `;
+}
+
+/** wa.me and sms: want the number without spaces; wa.me also without the +. */
+export const whatsappHref = (phone: string, text: string) => `https://wa.me/${phone.replace(/\D/g, "")}?text=${encodeURIComponent(text)}`;
+export const smsHref = (phone: string, text: string) => `sms:${phone}?body=${encodeURIComponent(text)}`;

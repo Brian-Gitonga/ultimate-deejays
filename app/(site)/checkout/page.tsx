@@ -19,6 +19,8 @@ export const metadata: Metadata = {
 
 const card = "rounded-2xl border border-black/[0.06] bg-card p-6 shadow-[0_8px_30px_-6px_rgb(0_0_0/0.08)] dark:border-white/10";
 
+const longDate = new Intl.DateTimeFormat("en-US", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
+
 export default async function CheckoutPage({ searchParams }: PageProps<"/checkout">) {
   const params = await searchParams;
   const one = (value: string | string[] | undefined) => (Array.isArray(value) ? value[0] : value);
@@ -61,6 +63,14 @@ export default async function CheckoutPage({ searchParams }: PageProps<"/checkou
   const currentPlanName = settings.plans.find((p) => p.slug === viewer.plan)?.name ?? viewer.plan;
   const paymentsReady = quote.total === 0 || isPaystackConfigured();
   const typedApplied = quote.code && !quote.code.automatic;
+  const monthly = quote.billing === "monthly";
+  const until = quote.accessUntil ? longDate.format(new Date(quote.accessUntil)) : "";
+  const intro =
+    quote.kind === "renewal"
+      ? `Renew ${quote.planName} for another 30 days, on top of the days you have left.`
+      : quote.kind === "upgrade"
+        ? `Upgrade from ${currentPlanName} to ${quote.planName}.`
+        : `Unlock the ${quote.planName} plan.`;
 
   return (
     <main className="flex-1">
@@ -71,7 +81,7 @@ export default async function CheckoutPage({ searchParams }: PageProps<"/checkou
         </Link>
         <h1 className="mt-3 text-3xl font-bold tracking-tight text-foreground sm:text-4xl">Checkout</h1>
         <p className="mt-1 text-muted-foreground">
-          {quote.kind === "upgrade" ? `Upgrade from ${currentPlanName} to ${quote.planName}.` : `Unlock the ${quote.planName} plan.`} One payment, lifetime access.
+          {intro} {monthly ? "30 days per payment. Nothing renews by itself: pay again when you want another month." : "One payment, yours for good."}
         </p>
 
         <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_25rem] lg:gap-8">
@@ -94,11 +104,11 @@ export default async function CheckoutPage({ searchParams }: PageProps<"/checkou
             <dl className="mt-8 grid grid-cols-1 gap-4 border-t border-border pt-6 text-sm sm:grid-cols-3">
               <div>
                 <dt className="text-muted-foreground">Access</dt>
-                <dd className="mt-0.5 font-semibold text-foreground">Lifetime, no renewals</dd>
+                <dd className="mt-0.5 font-semibold text-foreground">{monthly ? `30 days, until ${until}` : "For good, no renewals"}</dd>
               </div>
               <div>
                 <dt className="text-muted-foreground">Starts</dt>
-                <dd className="mt-0.5 font-semibold text-foreground">Straight after payment</dd>
+                <dd className="mt-0.5 font-semibold text-foreground">{quote.kind === "renewal" ? "After your current days" : "Straight after payment"}</dd>
               </div>
               {settings.pricing.guaranteeDays > 0 && (
                 <div>
@@ -115,12 +125,14 @@ export default async function CheckoutPage({ searchParams }: PageProps<"/checkou
             </h2>
             <dl className="mt-4 space-y-2.5 text-[0.9375rem]">
               <div className="flex justify-between gap-4">
-                <dt className="text-muted-foreground">{quote.planName} plan</dt>
+                <dt className="text-muted-foreground">
+                  {quote.planName} plan{monthly ? ", 30 days" : ""}
+                </dt>
                 <dd className="font-medium text-foreground tabular-nums">{money(quote.price)}</dd>
               </div>
               {quote.credit > 0 && (
                 <div className="flex justify-between gap-4">
-                  <dt className="text-muted-foreground">Credit for {currentPlanName}</dt>
+                  <dt className="text-muted-foreground">{quote.creditLabel || `Credit for ${currentPlanName}`}</dt>
                   <dd className="font-medium text-foreground tabular-nums">−{money(quote.credit)}</dd>
                 </div>
               )}

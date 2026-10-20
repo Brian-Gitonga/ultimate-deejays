@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { RequestEditForm } from "@/components/edits/request-edit-form";
 import { UpgradeMessage } from "@/components/upgrade/upgrade-message";
 import { left, meterLabel } from "@/lib/allowances";
+import { PLAN_RANK, type PlanSlug } from "@/lib/plan-tiers";
 import { requireViewer } from "@/lib/dal";
 import { getMyAllowance } from "@/lib/db/allowances";
 import { getEditSetup } from "@/lib/db/edits";
@@ -14,7 +15,6 @@ import type { UpgradeContext, UpgradeReason } from "@/lib/upgrade";
 
 export const metadata: Metadata = { title: "Request an edit" };
 
-const PLAN_RANK = { "warm-up": 0, resident: 1, headliner: 2 } as const;
 
 /*
  * /account/edits/new?template=<slug>: the request form for one template. The
@@ -70,7 +70,7 @@ export default async function NewEditRequestPage({ searchParams }: PageProps<"/a
 }
 
 /* Why they can't ask yet, the plans that would let them, and the way back. */
-function Blocked({ reason, plan, upgrade, back }: { reason: UpgradeReason; plan: keyof typeof PLAN_RANK; upgrade: UpgradeContext; back: string }) {
+function Blocked({ reason, plan, upgrade, back }: { reason: UpgradeReason; plan: PlanSlug; upgrade: UpgradeContext; back: string }) {
   return (
     <section aria-labelledby="blocked-title" className="mx-auto w-full max-w-xl rounded-3xl border border-black/[0.06] bg-card p-6 shadow-[0_8px_30px_-6px_rgb(0_0_0/0.06)] sm:p-8 dark:border-white/10">
       <UpgradeMessage reason={reason} current={plan} context={upgrade} titleId="blocked-title" />

@@ -4,15 +4,13 @@ import { z } from "zod";
 import { isUuid, type ActionResult } from "@/lib/action-result";
 import { getStudioEditRequest } from "@/lib/db/studio/edits";
 import type { EditStatus, StudioEditRequest } from "@/lib/edits";
-import { siteName, siteUrl } from "@/lib/site";
-import { sendSms } from "@/lib/sms";
 import { adminAction, must, StudioError } from "@/lib/studio-action";
 
 /*
  * Studio → Edit requests. One action for every step: start working, ask
  * the member a question, deliver the files, decline, reopen, or just save a
- * note. Asking a question and delivering text the member when they asked for
- * texts (and Africa's Talking is set up).
+ * note. Nothing is texted automatically: the team messages the member
+ * themselves (WhatsApp or SMS buttons in the request drawer).
  */
 
 const fileSchema = z
@@ -66,18 +64,6 @@ export async function updateEditRequest(id: string, update: EditUpdate): Promise
         const { error } = await supabase.storage.from("edits").remove(removed);
         if (error) console.error("[updateEditRequest] removing files", error.message);
       }
-    }
-
-    // A text for "ready" and "we have a question", when they asked for one.
-    const notify = status && status !== before.status && (status === "delivered" || status === "needs_info");
-    if (notify && before.textMe && before.phone) {
-      const link = `${siteUrl}/account/edits/${id}`;
-      const title = before.resource.title || "your template";
-      const text =
-        status === "delivered"
-          ? `${siteName}: your edit of "${title}" is ready. Download it here: ${link}`
-          : `${siteName}: we have a question about your edit of "${title}". Answer here: ${link}`;
-      await sendSms(before.phone, text);
     }
 
     const after = await getStudioEditRequest(id, supabase);

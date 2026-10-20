@@ -6,8 +6,8 @@ import { youtubeId } from "@/lib/curriculum";
 import { CONTENT_TAGS } from "@/lib/db/content-client";
 import { getStudioStoreResource } from "@/lib/db/studio/store";
 import { editFieldTypes, MAX_FIELDS } from "@/lib/edits";
-import { isStorePath, pathFor, storageProviders } from "@/lib/storage";
-import { availableProviders, removeStored, signedUploadUrl } from "@/lib/storage.server";
+import { isStorePath, objectKey, pathFor, storageProviders } from "@/lib/storage";
+import { availableProviders, removeStored, signedPlaybackUrl, signedUploadUrl } from "@/lib/storage.server";
 import { storagePathFor, storeCategories, type StudioStoreResource } from "@/lib/store";
 import { adminAction, must, StudioError } from "@/lib/studio-action";
 
@@ -57,6 +57,8 @@ const schema = z.object({
     .trim()
     .max(300)
     .refine((v) => !v || youtubeId(v), "The preview must be a YouTube link."),
+  previewVideo: z.string().max(500),
+  heroFeatured: z.boolean().optional().default(false),
   access: z.enum(["warm-up", "resident", "headliner"]),
   lowerThird: z.boolean(),
   instructorId: z.uuid().nullable(),
@@ -82,6 +84,9 @@ export async function saveStoreResource(resource: StudioStoreResource): Promise<
       const r = parsed.data;
       if (r.status === "published" && !r.files.length) throw new StudioError("Add at least one file before publishing.");
       if (r.editsEnabled && !r.editForm.length) throw new StudioError("Add at least one field to the edit request form, or switch edits off.");
+      // A preview clip is one of this resource's uploads, and plays over its thumbnail.
+      if (r.previewVideo && !(isStorePath(r.previewVideo) && objectKey(r.previewVideo).startsWith(`resources/${r.id}/`))) throw new StudioError("Upload the preview video again.");
+      if (r.previewVideo && !r.thumbnail) throw new StudioError("Add a thumbnail too: it shows while the preview video loads, and on phones.");
 
       const values = {
         slug: r.slug,
@@ -97,17 +102,31 @@ export async function saveStoreResource(resource: StudioStoreResource): Promise<
         featured: r.featured,
       };
       const edits = { edits_enabled: r.editsEnabled, edit_turnaround: r.editTurnaround, edit_form: r.editForm };
-      const { data: existing } = await supabase.from("store_resources").select("id").eq("id", r.id).maybeSingle();
-      const write = (row: typeof values & Partial<typeof edits>) =>
+      const { data: existing } = await supabase.from("store_resources").select("*").eq("id", r.id).maybeSingle();
+      const write = (row: typeof values & Partial<typeof edits> & { preview_video?: string; hero_featured?: boolean }) =>
         existing ? supabase.from("store_resources").update(row).eq("id", r.id) : supabase.from("store_resources").insert({ id: r.id, ...row });
-      let { error } = await write({ ...values, ...edits });
-      // Before migration 016 the edit columns aren't there: save the rest.
-      if (error?.code === "42703" || error?.code === "PGRST204") {
-        if (r.editsEnabled) throw new StudioError("Edits need migration 016: run supabase/migrations/20261012090000_edits_allowances.sql, then save again.");
-        ({ error } = await write(values));
+      const missingColumn = (e: { code?: string } | null) => e?.code === "42703" || e?.code === "PGRST204";
+      // Only lower thirds go in the /lower-thirds hero.
+      const heroFeatured = r.heroFeatured && r.lowerThird;
+      let { error } = await write({ ...values, ...edits, preview_video: r.previewVideo, hero_featured: heroFeatured });
+      // Before migration 019 (hero_featured), 018 (preview_video) or 016 (edits) those columns aren't there: save the rest.
+      if (missingColumn(error)) {
+        if (heroFeatured) throw new StudioError("The Lower thirds hero needs migration 019: run supabase/migrations/20261016090000_lower_thirds_hero.sql, then save again.");
+        ({ error } = await write({ ...values, ...edits, preview_video: r.previewVideo }));
+      }
+      if (missingColumn(error)) {
+        if (r.previewVideo) throw new StudioError("Preview videos need migration 018: run supabase/migrations/20261015090000_store_preview_video.sql, then save again.");
+        ({ error } = await write({ ...values, ...edits }));
+        if (error?.code === "42703" || error?.code === "PGRST204") {
+          if (r.editsEnabled) throw new StudioError("Edits need migration 016: run supabase/migrations/20261012090000_edits_allowances.sql, then save again.");
+          ({ error } = await write(values));
+        }
       }
       if (error?.code === "23505") throw new StudioError("Another resource already uses that URL. Change it and save again.");
       if (error) throw error;
+      // A replaced or removed preview clip is deleted from its storage.
+      const oldVideo = existing?.preview_video ?? "";
+      if (oldVideo && oldVideo !== r.previewVideo) await removeStored([oldVideo]);
 
       // The file list: remove what was taken out, update the rest, add the new ones.
       const current = must(await supabase.rpc("studio_store_files", { target: r.id }));
@@ -149,8 +168,9 @@ export async function deleteStoreResource(id: string): Promise<ActionResult> {
     async ({ supabase }) => {
       if (!z.uuid().safeParse(id).success) return null;
       const files = must(await supabase.rpc("studio_store_files", { target: id }));
+      const { data: row } = await supabase.from("store_resources").select("*").eq("id", id).maybeSingle();
       must(await supabase.from("store_resources").delete().eq("id", id));
-      await removeStored(files.filter((f) => f.kind === "storage" && f.path).map((f) => f.path));
+      await removeStored([...files.filter((f) => f.kind === "storage" && f.path).map((f) => f.path), ...(row?.preview_video ? [row.preview_video] : [])]);
       return null;
     },
     { tags: [CONTENT_TAGS.store] },
@@ -178,5 +198,15 @@ export async function discardStoreUploads(paths: string[]): Promise<ActionResult
     const valid = (Array.isArray(paths) ? paths : []).filter((p) => typeof p === "string" && isStorePath(p)).slice(0, 200);
     await removeStored(valid);
     return null;
+  });
+}
+
+/** A link to watch a resource's saved preview clip in Studio (drafts too), valid for an hour. */
+export async function studioPreviewVideoUrl(path: string): Promise<ActionResult<string>> {
+  return adminAction("load the preview video", async () => {
+    if (typeof path !== "string" || !isStorePath(path)) throw new StudioError("That isn't a store video.");
+    const url = await signedPlaybackUrl(path, 60 * 60);
+    if (!url) throw new StudioError("Couldn't load the preview video. Check the storage settings.");
+    return url;
   });
 }

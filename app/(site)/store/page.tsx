@@ -7,6 +7,7 @@ import { getStoreResources } from "@/lib/db/store";
 import { getUpgradeContext } from "@/lib/db/upgrade";
 import { siteName } from "@/lib/site";
 import { filtersFromSearch } from "@/lib/store";
+import { MediaPreconnect } from "@/components/store/media-preconnect";
 
 export const metadata: Metadata = {
   title: "Store: DJ practice tracks, sample packs & templates",
@@ -22,6 +23,7 @@ export default async function StorePage({ searchParams }: PageProps<"/store">) {
   return (
     // Wide: the catalogue uses the whole screen (see data-layout in globals.css).
     <main className="flex-1" data-layout="wide">
+      <MediaPreconnect when={resources.some((r) => r.previewVideo)} />
       <div className="site-container pt-6 pb-28 sm:pt-10">
         <nav aria-label="Breadcrumb" className="mb-3">
           <ol className="flex items-center gap-1.5 text-sm text-muted-foreground">

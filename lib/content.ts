@@ -1,5 +1,5 @@
 import type { CategorySlug, Level, SubcategorySlug } from "./course-taxonomy";
-import type { Plan } from "./plans";
+import type { ContentPlan } from "./plan-tiers";
 import type { PostCategory } from "./post-categories";
 
 /*
@@ -29,7 +29,8 @@ export type Course = {
   category: CategorySlug;
   subcategory?: SubcategorySlug;
   /** The cheapest plan that includes this course */
-  access: Plan["slug"];
+  /** The lowest plan that includes it (Lifetime gets everything) */
+  access: ContentPlan;
   instructor: Instructor;
   students: number;
   durationMinutes: number;

@@ -3,16 +3,20 @@ import { Faq } from "@/components/faq";
 import { FeaturedCategories } from "@/components/featured-categories";
 import { Hero } from "@/components/hero";
 import { Instructors } from "@/components/instructors";
+import { LatestTemplates, pickLatestTemplates } from "@/components/latest-templates";
 import { LatestPosts } from "@/components/latest-posts";
 import { Newsletter } from "@/components/newsletter";
 import { Stats } from "@/components/stats";
 import { TrustedBy } from "@/components/trusted-by";
-import { getLatestCourses, getPopularCourses } from "@/lib/db/courses";
+import { getPopularCourses } from "@/lib/db/courses";
+import { getStoreResources } from "@/lib/db/store";
+import { MediaPreconnect } from "@/components/store/media-preconnect";
 
 export default async function Home() {
-  const [popularCourses, latestCourses] = await Promise.all([getPopularCourses(), getLatestCourses()]);
+  const [popularCourses, storeResources] = await Promise.all([getPopularCourses(), getStoreResources()]);
   return (
     <main className="flex-1">
+      <MediaPreconnect when={storeResources.some((r) => r.previewVideo)} />
       {/* Pulled up under the sticky header so the glow shows through it at the top */}
       <div className="hero-backdrop -mt-20 pt-20 lg:-mt-[5.5rem] lg:pt-[5.5rem]">
         <Hero />
@@ -32,14 +36,7 @@ export default async function Home() {
 
       <Stats />
 
-      <CoursesSection
-        id="latest-courses"
-        eyebrow="Just Dropped"
-        title="Latest Courses"
-        description="Fresh lessons every month: new techniques, new genres and new gear, straight from the booth."
-        courses={latestCourses}
-        glow="violet-mint"
-      />
+      <LatestTemplates resources={pickLatestTemplates(storeResources)} />
 
       <Instructors />
       <Faq />

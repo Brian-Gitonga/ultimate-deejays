@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { PlanSlug } from "@/lib/allowances";
-import { upgradeCopy, upgradeCredit, upgradeOptions, type UpgradeContext, type UpgradeReason } from "@/lib/upgrade";
+import { upgradeCopy, upgradeNote, upgradeOptions, type UpgradeContext, type UpgradeReason } from "@/lib/upgrade";
 import { DownloadIcon, LockIcon, PencilIcon } from "../icons";
 import { UpgradeOptions } from "./upgrade-options";
 
@@ -34,7 +34,7 @@ export function UpgradeMessage({ reason, current, context, titleId }: { reason: 
             See my edits
           </Link>
         ) : (
-          <UpgradeOptions options={options} currency={context.currency} credit={upgradeCredit(context, current)} />
+          <UpgradeOptions options={options} currency={context.currency} note={upgradeNote(context, current)} />
         )}
       </div>
     </>

@@ -8,20 +8,36 @@ import { adminAction, must, StudioError } from "@/lib/studio-action";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 const changeSchema = z.object({
-  plan: z.enum(["warm-up", "resident", "headliner"]),
+  plan: z.enum(["warm-up", "resident", "headliner", "lifetime"]),
   status: z.enum(["active", "suspended"]),
 });
 
 /**
  * Saves what the studio can change about a student: their plan (a gift or a
  * correction; payments don't change) and whether they're suspended (suspended
- * students can't log in).
+ * students can't log in). A plan changed here is theirs for good: no end
+ * date, and it's what they keep (migration 021). Saving the same plan leaves
+ * a monthly plan's end date alone.
  */
 export async function saveStudent(student: Student): Promise<ActionResult<Student>> {
   return adminAction("update the student", async ({ supabase }) => {
     const parsed = changeSchema.safeParse(student);
     if (!parsed.success) throw new StudioError(parsed.error.issues[0].message);
-    must(await supabase.from("profiles").update(parsed.data).eq("id", student.id).eq("role", "user").select("id").single());
+    const before = must(await supabase.from("profiles").select("plan").eq("id", student.id).eq("role", "user").single());
+    const changed = before.plan !== parsed.data.plan;
+    const grant = { base_plan: parsed.data.plan, plan_expires_at: null };
+    let result = await supabase
+      .from("profiles")
+      .update(changed ? { ...parsed.data, ...grant } : parsed.data)
+      .eq("id", student.id)
+      .eq("role", "user")
+      .select("id")
+      .single();
+    // Before migration 021 there's no base plan or end date.
+    if (changed && (result.error?.code === "42703" || result.error?.code === "PGRST204")) {
+      result = await supabase.from("profiles").update(parsed.data).eq("id", student.id).eq("role", "user").select("id").single();
+    }
+    must(result);
     const saved = await getStudent(student.id, supabase);
     if (!saved) throw new StudioError("Student not found.");
     return saved;

@@ -1,7 +1,5 @@
 import type { ReactNode } from "react";
 import { AuthIllustration } from "./auth-illustration";
-import { Logo } from "./logo";
-import { ThemeToggle } from "./theme-toggle";
 
 /*
  * Split-screen layout for the auth pages: a welcome message and illustration
@@ -23,7 +21,7 @@ export function AuthShell({
   children: ReactNode;
 }) {
   return (
-    <main className="grid min-h-dvh flex-1 lg:grid-cols-2">
+    <main className="grid min-h-[calc(100dvh-5rem)] flex-1 border-t border-border lg:min-h-[calc(100dvh-5.5rem)] lg:grid-cols-2">
       <aside className="relative isolate hidden flex-col items-center justify-center overflow-hidden border-r border-border px-10 py-16 lg:flex">
         <div
           aria-hidden="true"
@@ -41,11 +39,6 @@ export function AuthShell({
       </aside>
 
       <div className="flex flex-col px-5 py-8 sm:px-10">
-        <div className="flex items-center justify-between">
-          <Logo />
-          <ThemeToggle />
-        </div>
-
         <div className="mx-auto flex w-full max-w-[27.5rem] flex-1 flex-col justify-center py-10">
           <h1 className="text-[1.75rem] leading-tight font-bold tracking-tight text-foreground sm:text-[1.875rem]">{title}</h1>
           <p className="mt-2 text-[0.9375rem] text-pretty text-muted-foreground">{description}</p>

@@ -6,7 +6,9 @@ import type { LearningSummary } from "@/lib/db/learning";
 import type { EditRequest } from "@/lib/edits";
 import { formatMoney } from "@/lib/money";
 import { resourcePath, type StoreResource } from "@/lib/store";
-import { plansAbove, upgradeCredit, type UpgradeContext } from "@/lib/upgrade";
+import { priceSuffix } from "@/lib/plan-tiers";
+import type { PlanStatus } from "@/lib/plan-status";
+import { plansAbove, upgradeNote, type UpgradeContext } from "@/lib/upgrade";
 import { EditStatusChip } from "./edits/edit-status";
 import { ArrowRightIcon, AwardIcon, CheckIcon, ClockIcon, LessonIcon, LockIcon, ShieldIcon, SparklesIcon } from "./icons";
 import { DownloadAgain } from "./store/download-again";
@@ -25,9 +27,8 @@ const ago = (iso: string, now: number) => {
 };
 
 /* Their plan by name, and whether it's paid for. */
-export function PlanCard({ plan, isAdmin, upgrade }: { plan: PlanSlug; isAdmin: boolean; upgrade: UpgradeContext }) {
+export function PlanCard({ plan, isAdmin, upgrade, status }: { plan: PlanSlug; isAdmin: boolean; upgrade: UpgradeContext; status: PlanStatus }) {
   const name = upgrade.plans.find((p) => p.slug === plan)?.name ?? plan;
-  const top = !isAdmin && plansAbove(upgrade.plans, plan).length === 0;
   return (
     <section aria-labelledby="plan-title" className={`${card} flex flex-wrap items-center justify-between gap-4 p-5 sm:p-6`}>
       <div className="flex items-center gap-4">
@@ -39,19 +40,16 @@ export function PlanCard({ plan, isAdmin, upgrade }: { plan: PlanSlug; isAdmin: 
           <h2 id="plan-title" className="text-xl leading-tight font-bold tracking-tight text-foreground">
             {isAdmin ? "Admin" : name}
           </h2>
-          <p className="mt-0.5 text-sm text-muted-foreground">
-            {isAdmin
-              ? "Everything is unlocked for admins."
-              : top
-                ? "Our top plan: you have everything. Paid once, yours for life."
-                : plan === "warm-up"
-                  ? "Free forever."
-                  : "Paid once, yours for life. Nothing renews."}
-          </p>
+          <p className={`mt-0.5 text-sm ${status.ending ? "font-medium text-[#9a6400] dark:text-accent-amber" : "text-muted-foreground"}`}>{status.line}</p>
         </div>
       </div>
       {!isAdmin && (
         <div className="flex flex-wrap gap-2">
+          {status.renew && (
+            <Link href={status.renew.href} className="inline-flex h-10 items-center rounded-lg bg-brand px-4 text-sm font-semibold text-white transition hover:brightness-110">
+              {status.renew.label}
+            </Link>
+          )}
           <Link href="/account/billing" className="inline-flex h-10 items-center rounded-lg border border-border px-4 text-sm font-semibold text-foreground transition hover:bg-foreground/5">
             Billing &amp; receipts
           </Link>
@@ -68,7 +66,7 @@ export function PlanCard({ plan, isAdmin, upgrade }: { plan: PlanSlug; isAdmin: 
 export function UpgradeSection({ current, upgrade }: { current: PlanSlug; upgrade: UpgradeContext }) {
   const options = plansAbove(upgrade.plans, current);
   if (!options.length) return null;
-  const credit = upgradeCredit(upgrade, current);
+  const note = upgradeNote(upgrade, current);
 
   return (
     <section aria-labelledby="upgrade-title" className={`${card} p-5 sm:p-6`}>
@@ -76,7 +74,7 @@ export function UpgradeSection({ current, upgrade }: { current: PlanSlug; upgrad
         Want more?
       </h2>
       <p className="mt-1 text-sm text-muted-foreground">
-        Pay once and it&apos;s yours for life{credit > 0 ? ". You only pay the difference from your current plan." : "."}
+        Monthly plans run 30 days per payment, with M-Pesa or card. Lifetime is one payment, for good.{note ? ` ${note}` : ""}
       </p>
       <ul className={`mt-4 grid gap-3 ${options.length > 1 ? "md:grid-cols-2" : ""}`}>
         {options.map((p) => {
@@ -98,8 +96,8 @@ export function UpgradeSection({ current, upgrade }: { current: PlanSlug; upgrad
               </div>
               <div className={`flex items-center gap-4 ${options.length === 1 ? "sm:shrink-0" : "mt-auto justify-between"}`}>
                 <p className="leading-tight">
-                  <span className="block font-bold text-foreground tabular-nums">{formatMoney(Math.max(0, p.price - credit), upgrade.currency)}</span>
-                  <span className="text-xs text-muted-foreground">{credit > 0 ? "to upgrade" : "one-time"}</span>
+                  <span className="block font-bold text-foreground tabular-nums">{formatMoney(p.price, upgrade.currency)}</span>
+                  <span className="text-xs text-muted-foreground">{priceSuffix(p.slug)}</span>
                 </p>
                 <Link
                   href={`/checkout?plan=${p.slug}`}

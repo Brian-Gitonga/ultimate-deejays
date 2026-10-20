@@ -5,6 +5,7 @@ import { readReferralVisit } from "@/lib/referrals.server";
 import type { Tables } from "@/lib/supabase/database.types";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { discountOf, formatMoney, isAbove, normalizeCode, type AppliedCode, type PaidPlan, type Quote } from "./checkout";
+import { includesPlan, MONTH_DAYS, planBilling } from "./plan-tiers";
 
 /*
  * Prices an order: the plan, upgrade credit, one discount code and the
@@ -76,14 +77,51 @@ export async function priceOrder(viewer: Viewer, plan: PaidPlan, typedCode: stri
   const target = settings.plans.find((p) => p.slug === plan);
   if (!target || target.price <= 0) return { ok: false, reason: "unavailable", error: "That plan isn't for sale right now." };
   if (viewer.role === "admin") return { ok: false, reason: "admin", error: "Admins already have every course." };
-  if (!isAbove(plan, viewer.plan)) return { ok: false, reason: "owned", error: `Your plan already includes everything in ${target.name}.` };
-
-  const current = settings.plans.find((p) => p.slug === viewer.plan);
-  const kind = viewer.plan === "warm-up" ? "purchase" : "upgrade";
-  const credit = kind === "upgrade" && settings.pricing.upgradeCredit ? Math.min(current?.price ?? 0, target.price) : 0;
-  const base = Math.round((target.price - credit) * 100) / 100;
+  // Plans they keep for good (paid once before, or Lifetime) already include it.
+  if (includesPlan(viewer.basePlan, plan)) return { ok: false, reason: "owned", error: `Your plan already includes everything in ${target.name}.` };
 
   const admin = createAdminClient();
+  const billing = planBilling(plan) === "once" ? "once" : "monthly";
+  const now = Date.now();
+  const endsAt = viewer.planEndsAt ? Date.parse(viewer.planEndsAt) : null;
+  const onMonthly = endsAt !== null && endsAt > now;
+  const current = settings.plans.find((p) => p.slug === viewer.plan);
+  // What's left of the monthly plan they're on, at its monthly price.
+  const unusedDays = onMonthly ? Math.round(((current?.price ?? 0) * ((endsAt - now) / (MONTH_DAYS * DAY))) * 100) / 100 : 0;
+
+  let kind: Quote["kind"];
+  let accessUntil: string | null = null;
+  let credit = 0;
+  let creditLabel = "";
+  if (billing === "monthly") {
+    if (onMonthly && viewer.plan === plan) {
+      // The same plan again: 30 more days after the current end.
+      kind = "renewal";
+      accessUntil = new Date(endsAt + MONTH_DAYS * DAY).toISOString();
+    } else if (onMonthly && isAbove(viewer.plan, plan)) {
+      const until = new Intl.DateTimeFormat("en-US", { day: "numeric", month: "long", timeZone: "UTC" }).format(endsAt);
+      return { ok: false, reason: "owned", error: `You're on ${current?.name ?? "a higher plan"} until ${until}. You can switch to ${target.name} after that.` };
+    } else {
+      kind = viewer.plan === "warm-up" ? "purchase" : "upgrade";
+      accessUntil = new Date(now + MONTH_DAYS * DAY).toISOString();
+      if (onMonthly && settings.pricing.upgradeCredit && unusedDays > 0) {
+        credit = unusedDays;
+        creditLabel = `Unused days of ${current?.name ?? "your plan"}`;
+      }
+    }
+  } else {
+    kind = viewer.plan === "warm-up" && viewer.basePlan === "warm-up" ? "purchase" : "upgrade";
+    if (settings.pricing.upgradeCredit) {
+      // What they paid once before (plans bought before they went monthly), plus unused monthly days.
+      const once = await admin.from("payments").select("amount").eq("user_id", viewer.id).eq("status", "paid").eq("billing", "once");
+      const paidOnce = once.error ? 0 : (once.data ?? []).reduce((sum, p) => sum + Number(p.amount), 0);
+      credit = Math.round((paidOnce + unusedDays) * 100) / 100;
+      creditLabel = paidOnce && unusedDays ? "What you've paid for your plans" : paidOnce ? "What you paid for your plan" : `Unused days of ${current?.name ?? "your plan"}`;
+    }
+  }
+  credit = Math.min(credit, target.price);
+  const base = Math.round((target.price - credit) * 100) / 100;
+
   const program = settings.affiliates;
   const windowMs = program.cookieDays * DAY;
   const code = normalizeCode(typedCode);
@@ -157,9 +195,12 @@ export async function priceOrder(viewer: Viewer, plan: PaidPlan, typedCode: stri
         plan,
         planName: target.name,
         kind,
+        billing,
+        accessUntil,
         currency,
         price: target.price,
         credit,
+        creditLabel,
         discount,
         total,
         code: applied,

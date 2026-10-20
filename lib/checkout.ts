@@ -4,15 +4,9 @@
  * server works the total out again on every step.
  */
 
-export const PAID_PLANS = ["resident", "headliner"] as const;
-export type PaidPlan = (typeof PAID_PLANS)[number];
-export type PlanSlug = "warm-up" | "resident" | "headliner";
+import type { PaidPlan } from "./plan-tiers";
 
-export const isPaidPlan = (value: unknown): value is PaidPlan => value === "resident" || value === "headliner";
-
-const PLAN_RANK: Record<PlanSlug, number> = { "warm-up": 0, resident: 1, headliner: 2 };
-/** Whether `plan` is above `current` (an upgrade). */
-export const isAbove = (plan: PlanSlug, current: PlanSlug) => PLAN_RANK[plan] > PLAN_RANK[current];
+export { PAID_PLANS, isAbove, isPaidPlan, type PaidPlan, type PlanSlug } from "./plan-tiers";
 
 /** What buyers type: "djkaya " → "DJKAYA". Promo and affiliate codes are A–Z and 0–9. */
 export const normalizeCode = (value: string | null | undefined) =>
@@ -34,12 +28,19 @@ export type AppliedCode = {
 export type Quote = {
   plan: PaidPlan;
   planName: string;
-  kind: "purchase" | "upgrade";
+  /** renewal = the monthly plan they're on, again (30 more days) */
+  kind: "purchase" | "upgrade" | "renewal";
+  /** monthly (Resident, Headliner) or once (Lifetime) */
+  billing: "monthly" | "once";
+  /** Monthly plans: the date it runs to once paid; null for Lifetime */
+  accessUntil: string | null;
   currency: string;
   /** The plan's price */
   price: number;
-  /** Upgrades: what their current plan cost, taken off (Settings → Pricing → upgrade credit) */
+  /** Taken off (Settings → Pricing → upgrade credit): unused days of a monthly plan, and for Lifetime what they paid once before */
   credit: number;
+  /** What the credit is for, e.g. "Unused days of Resident" */
+  creditLabel: string;
   discount: number;
   /** What they pay */
   total: number;

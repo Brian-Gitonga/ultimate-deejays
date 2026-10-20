@@ -1102,6 +1102,7 @@ export type Database = {
           country: string;
           plan: Database["public"]["Enums"]["plan_tier"];
           kind: string;
+          billing: string;
           amount: number;
           fee: number;
           currency: string;
@@ -1129,6 +1130,7 @@ export type Database = {
           country?: string;
           plan: Database["public"]["Enums"]["plan_tier"];
           kind?: string;
+          billing?: string;
           amount: number;
           fee?: number;
           currency?: string;
@@ -1156,6 +1158,7 @@ export type Database = {
           country?: string;
           plan?: Database["public"]["Enums"]["plan_tier"];
           kind?: string;
+          billing?: string;
           amount?: number;
           fee?: number;
           currency?: string;
@@ -1292,6 +1295,8 @@ export type Database = {
           created_at: string;
           updated_at: string;
           plan: Database["public"]["Enums"]["plan_tier"];
+          base_plan: Database["public"]["Enums"]["plan_tier"];
+          plan_expires_at: string | null;
           status: string;
           last_seen_at: string | null;
           referred_by: string | null;
@@ -1315,6 +1320,8 @@ export type Database = {
           created_at?: string;
           updated_at?: string;
           plan?: Database["public"]["Enums"]["plan_tier"];
+          base_plan?: Database["public"]["Enums"]["plan_tier"];
+          plan_expires_at?: string | null;
           status?: string;
           last_seen_at?: string | null;
           referred_by?: string | null;
@@ -1338,6 +1345,8 @@ export type Database = {
           created_at?: string;
           updated_at?: string;
           plan?: Database["public"]["Enums"]["plan_tier"];
+          base_plan?: Database["public"]["Enums"]["plan_tier"];
+          plan_expires_at?: string | null;
           status?: string;
           last_seen_at?: string | null;
           referred_by?: string | null;
@@ -1522,6 +1531,8 @@ export type Database = {
           status: string;
           featured: boolean;
           lower_third: boolean;
+          preview_video: string;
+          hero_featured: boolean;
           edits_enabled: boolean;
           edit_form: Json;
           edit_turnaround: string;
@@ -1541,6 +1552,8 @@ export type Database = {
           preview_url?: string;
           access_plan?: Database["public"]["Enums"]["plan_tier"];
           lower_third?: boolean;
+          preview_video?: string;
+          hero_featured?: boolean;
           edits_enabled?: boolean;
           edit_form?: Json;
           edit_turnaround?: string;
@@ -1563,6 +1576,8 @@ export type Database = {
           preview_url?: string;
           access_plan?: Database["public"]["Enums"]["plan_tier"];
           lower_third?: boolean;
+          preview_video?: string;
+          hero_featured?: boolean;
           edits_enabled?: boolean;
           edit_form?: Json;
           edit_turnaround?: string;
@@ -1687,6 +1702,8 @@ export type Database = {
       mark_edit_seen: { Args: { request: string }; Returns: undefined };
       my_allowance: { Args: never; Returns: Json };
       my_downloads: { Args: { max_rows?: number }; Returns: { resource_id: string; last_at: string }[] };
+      expire_my_plan: { Args: never; Returns: boolean };
+      expire_plans: { Args: never; Returns: number };
       reply_edit_request: { Args: { request: string; body: string }; Returns: boolean };
       request_edit: { Args: { resource_slug: string; answers: Json; notes?: string; phone?: string; text_me?: boolean }; Returns: Json };
       store_download: { Args: { resource_slug: string; file_ids?: string[] }; Returns: Json };
@@ -1711,7 +1728,7 @@ export type Database = {
       dj_experience: "new" | "bedroom" | "gigging" | "pro";
       payment_method: "card" | "paypal" | "mobile_money" | "bank_transfer" | "free";
       payment_status: "paid" | "refunded";
-      plan_tier: "warm-up" | "resident" | "headliner";
+      plan_tier: "warm-up" | "resident" | "headliner" | "lifetime";
       post_status: "draft" | "scheduled" | "published";
     };
     CompositeTypes: { [_ in never]: never };

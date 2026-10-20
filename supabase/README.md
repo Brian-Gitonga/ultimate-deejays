@@ -36,13 +36,17 @@ Supabase dashboard → **SQL Editor** → **New query** → paste the whole file
 | 015 | `20261011090000_lower_thirds.sql` | Lower thirds replace challenges: the `store_resources.lower_third` switch (shown on /lower-thirds), and challenges removed (tables, functions, types, their figures in the studio views, the email preference, the media folder and the pricing lines) |
 | 016 | `20261012090000_edits_allowances.sql` | Template edits (request forms on templates, edit requests, messages, the private `edits` bucket), plan allowances (downloads and edits per plan, enforced by `store_download()` and `request_edit()`), phone numbers for texts, coupons limited to certain emails |
 | 017 | `20261012100000_my_downloads.sql` | `my_downloads()`: a member's own recent downloads, listed on Account → Overview |
+| 018 | `20261015090000_store_preview_video.sql` | `store_resources.preview_video`: the clip that plays when someone hovers a template, and on its page |
+| 019 | `20261016090000_lower_thirds_hero.sql` | `store_resources.hero_featured`: lower thirds picked in Studio → Store for the autoplaying carousel at the top of /lower-thirds |
+| 020 | `20261019090000_lifetime_plan.sql` | The Lifetime plan level (above Headliner). **Run it on its own**, then 021 |
+| 021 | `20261019090100_monthly_plans.sql` | Monthly plans: Resident and Headliner give 30 days per payment (any method, nothing auto-renews), members keep plans bought once before, `expire_plans()` hourly via pg_cron, Lifetime's allowance |
 
 Migration 011 is large (about 140 KB). Paste it in one go; it runs as a single transaction.
 It skips anything that already exists, so it never overwrites edits made in the studio.
 
 ## First-time setup
 
-1. **Run the migrations above, in order.** Already ran 001–016? Run 017.
+1. **Run the migrations above, in order.** Already ran 001–019? Run 020 on its own, then 021.
 2. **Run `diagnostics/00_health_check.sql`.** Every row should be ✅.
 3. **Dashboard → Authentication → URL Configuration:**
    - Site URL: `http://localhost:3000`

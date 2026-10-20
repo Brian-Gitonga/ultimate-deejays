@@ -67,7 +67,7 @@ export function RequestEditDialog({
     const id = await state.submit();
     if (!id) return;
     const number = normalizePhone(state.phone);
-    setSent({ id, textTo: state.textMe && number ? formatPhone(number) : "" });
+    setSent({ id, textTo: number ? formatPhone(number) : "" });
     onSent?.();
     requestAnimationFrame(() => doneRef.current?.focus());
   }
@@ -124,7 +124,7 @@ export function RequestEditDialog({
               <p className="mt-2 text-sm text-pretty text-muted-foreground">
                 {sent.textTo ? (
                   <>
-                    We&apos;ll text you at <span className="font-medium text-foreground">{sent.textTo}</span> when it&apos;s ready.
+                    We&apos;ll message you at <span className="font-medium text-foreground">{sent.textTo}</span> when it&apos;s ready.
                   </>
                 ) : (
                   "We'll let you know in My edits when it's ready."

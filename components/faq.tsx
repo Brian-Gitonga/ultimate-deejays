@@ -17,7 +17,7 @@ const faqs: FaqItem[] = [
   {
     question: "How long do I have access to the course materials?",
     answer:
-      "Lifetime access. Once you enroll you can rewatch every lesson, download the practice tracks and cue sheets, and get every future update to that course at no extra cost.",
+      "For as long as your plan is active. Monthly plans run 30 days per payment, and Lifetime is yours for good. While you have access you can rewatch every lesson, download the practice tracks and cue sheets, and get every update to the course at no extra cost.",
   },
   {
     question: "Will I get a certificate after completing a course?",

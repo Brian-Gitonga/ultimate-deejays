@@ -348,7 +348,7 @@ export function CourseEditor({ course, instructors, takenSlugs }: { course: Stud
 
           {step === "access" && (
             <>
-              <StepIntro title="Access & delivery" text="Courses are unlocked by the one-time plans on your pricing page. Choose the lowest plan that includes this course." />
+              <StepIntro title="Access & delivery" text="Courses are unlocked by the plans on your pricing page. Choose the lowest plan that includes this course (Lifetime includes every course)." />
               <Panel title="Plan access">
                 <AccessPicker value={draft.access} onChange={(plan) => set("access", plan)} />
               </Panel>

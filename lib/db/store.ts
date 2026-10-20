@@ -1,6 +1,6 @@
 import "server-only";
 import { cache } from "react";
-import type { StorePlan, StoreResource } from "@/lib/store";
+import { previewVideoHref, type StorePlan, type StoreResource } from "@/lib/store";
 import { createClient } from "@/lib/supabase/server";
 import { contentClient, orThrow } from "./content-client";
 
@@ -13,24 +13,62 @@ const NOT_SET_UP = new Set(["PGRST205", "42P01"]);
  * name, size and type only: where they live is never readable here.
  */
 
-const COLUMNS =
-  "id, slug, title, description, category, thumbnail, preview_url, access_plan, lower_third, featured, download_count, published_at, created_at, instructor:instructors(name, image), files:store_files(id, name, size_bytes, mime_type, position)";
-// The same without lower_third, which comes with migration 015. Until it's run, the store works and /lower-thirds is empty.
-const COLUMNS_BEFORE_015 =
+const BASE_COLUMNS =
   "id, slug, title, description, category, thumbnail, preview_url, access_plan, featured, download_count, published_at, created_at, instructor:instructors(name, image), files:store_files(id, name, size_bytes, mime_type, position)";
+// Newer columns, newest first: if one is missing (its migration hasn't run) the store loads without it.
+const LATER_COLUMNS = [
+  { column: "hero_featured", migration: "20261016090000_lower_thirds_hero.sql" },
+  { column: "preview_video", migration: "20261015090000_store_preview_video.sql" },
+  { column: "lower_third", migration: "20261011090000_lower_thirds.sql" },
+];
 const NO_SUCH_COLUMN = "42703";
 
-async function publishedRows() {
+type Row = {
+  id: string;
+  slug: string;
+  title: string;
+  description: string;
+  category: string;
+  thumbnail: string;
+  preview_url: string;
+  access_plan: string;
+  featured: boolean;
+  download_count: number;
+  published_at: string | null;
+  created_at: string;
+  instructor: { name: string; image: string } | null;
+  files: { id: string; name: string; size_bytes: number; mime_type: string; position: number }[];
+  lower_third?: boolean;
+  preview_video?: string;
+  hero_featured?: boolean;
+};
+
+async function publishedRows(): Promise<Row[]> {
   const table = () => contentClient("store", "instructors").from("store_resources");
-  const result = await table().select(COLUMNS).eq("status", "published").order("published_at", { ascending: false });
-  if (result.error && NOT_SET_UP.has(result.error.code ?? "")) {
-    console.error("[store] The store tables are missing: run supabase/migrations/20261004090000_store.sql.");
-    return [];
+  for (let skip = 0; skip <= LATER_COLUMNS.length; skip++) {
+    const extra = LATER_COLUMNS.slice(skip).map((c) => c.column);
+    const result = await table()
+      .select([BASE_COLUMNS, ...extra].join(", "))
+      .eq("status", "published")
+      .order("published_at", { ascending: false });
+    if (result.error && NOT_SET_UP.has(result.error.code ?? "")) {
+      console.error("[store] The store tables are missing: run supabase/migrations/20261004090000_store.sql.");
+      return [];
+    }
+    if (result.error?.code === NO_SUCH_COLUMN && skip < LATER_COLUMNS.length) {
+      console.error(`[store] store_resources.${LATER_COLUMNS[skip].column} is missing: run supabase/migrations/${LATER_COLUMNS[skip].migration}.`);
+      continue;
+    }
+    return orThrow(result as unknown as { data: Row[] | null; error: { message: string } | null }, "the store");
   }
-  if (result.error?.code !== NO_SUCH_COLUMN) return orThrow(result, "the store");
-  console.error("[store] store_resources.lower_third is missing: run supabase/migrations/20261011090000_lower_thirds.sql.");
-  const older = await table().select(COLUMNS_BEFORE_015).eq("status", "published").order("published_at", { ascending: false });
-  return orThrow(older, "the store").map((row) => ({ ...row, lower_third: false }));
+  return [];
+}
+
+/** Where a published resource's preview clip lives, for the playback route. "" when it has none. */
+export async function getPreviewVideoPath(slug: string): Promise<string> {
+  const { data, error } = await contentClient("store").from("store_resources").select("preview_video").eq("slug", slug).eq("status", "published").maybeSingle();
+  if (error) return "";
+  return (data as { preview_video?: string } | null)?.preview_video ?? "";
 }
 
 export const getStoreResources = cache(async (): Promise<StoreResource[]> => {
@@ -47,8 +85,10 @@ export const getStoreResources = cache(async (): Promise<StoreResource[]> => {
       category: row.category,
       thumbnail: row.thumbnail,
       previewUrl: row.preview_url,
+      previewVideo: previewVideoHref(row.slug, row.preview_video ?? ""),
+      heroFeatured: row.hero_featured ?? false,
       access: row.access_plan as StorePlan,
-      lowerThird: row.lower_third,
+      lowerThird: row.lower_third ?? false,
       creator: row.instructor ? { name: row.instructor.name, image: row.instructor.image || null } : { name: "Ultimate Deejays", image: null },
       featured: row.featured,
       downloads: row.download_count,

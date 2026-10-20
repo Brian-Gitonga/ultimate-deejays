@@ -20,13 +20,14 @@ const isScrolled = () => window.scrollY > SCROLL_THRESHOLD;
  * Its height is fixed (h-20, lg 5.5rem), which the heroes pull up under
  * (-mt-20) so their background shows through at the top.
  */
-export function HeaderShell({ children }: { children: ReactNode }) {
+/** `sticky`: stays at the top while scrolling (default). Off where the page pins its own bar instead. */
+export function HeaderShell({ children, sticky = true }: { children: ReactNode; sticky?: boolean }) {
   const scrolled = useSyncExternalStore(subscribe, isScrolled, () => false);
 
   return (
     <header
       data-scrolled={scrolled || undefined}
-      className={`sticky top-0 z-50 h-20 border-b transition-[background-color,border-color,box-shadow,backdrop-filter] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none lg:h-[5.5rem] ${
+      className={`${sticky ? "sticky top-0" : "relative"} z-50 h-20 border-b transition-[background-color,border-color,box-shadow,backdrop-filter] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none lg:h-[5.5rem] ${
         scrolled
           ? "border-black/[0.07] bg-background/70 shadow-[0_8px_32px_-12px_rgb(0_0_0/0.18)] backdrop-blur-xl backdrop-saturate-150 dark:border-white/[0.08] dark:bg-[#0a0a0a]/65 dark:shadow-[0_8px_32px_-12px_rgb(0_0_0/0.8)]"
           : "border-transparent bg-transparent shadow-none backdrop-blur-none"

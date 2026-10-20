@@ -26,6 +26,9 @@ function toStudioResource(row: Tables<"store_resources">, files: FileRow[], stat
     category: row.category,
     thumbnail: row.thumbnail,
     previewUrl: row.preview_url,
+    // Before migration 018 the column isn't there yet.
+    previewVideo: row.preview_video ?? "",
+    heroFeatured: row.hero_featured ?? false,
     access: row.access_plan as StorePlan,
     lowerThird: row.lower_third ?? false,
     instructorId: row.instructor_id,

@@ -1,14 +1,18 @@
 /*
- * Pricing plans. One-time payments: pay once, keep access for life.
+ * Pricing plans: Warm-Up is free, Resident and Headliner are paid monthly
+ * (each payment gives 30 days), Lifetime is paid once (lib/plan-tiers.ts).
  * These are the defaults: names, prices and highlights saved in Studio →
  * Settings → Pricing override them on the pricing page and at checkout.
+ * A plan priced 0 (other than Warm-Up) isn't for sale and isn't shown.
  */
 
+import type { PlanSlug } from "./plan-tiers";
+
 export type Plan = {
-  slug: "warm-up" | "resident" | "headliner";
+  slug: PlanSlug;
   name: string;
   tagline: string;
-  /** One-time price in the store currency (Studio → Settings → Currency); 0 = free */
+  /** In the store currency (Studio → Settings → Currency): a month for Resident and Headliner, once for Lifetime; 0 = free (Warm-Up) or not for sale */
   price: number;
   cta: string;
   href: string;
@@ -64,34 +68,52 @@ export const plans: Plan[] = [
       "Press-kit & booking review",
     ],
   },
+  {
+    slug: "lifetime",
+    name: "Lifetime",
+    tagline: "Everything in Headliner, paid once and yours for good.",
+    // Not for sale until a price is set in Studio → Settings → Pricing.
+    price: 0,
+    cta: "Get Lifetime",
+    href: "/checkout?plan=lifetime",
+    highlights: ["Everything in Headliner", "One payment: nothing to renew", "Every future course and template included"],
+  },
 ];
 
 type Cell = boolean | string;
-export const comparison: { group: string; rows: { label: string; values: [Cell, Cell, Cell] }[] }[] = [
+/** One value per plan, in the order of `plans` (Warm-Up, Resident, Headliner, Lifetime). */
+export const comparison: { group: string; rows: { label: string; values: [Cell, Cell, Cell, Cell] }[] }[] = [
+  {
+    group: "Billing",
+    rows: [
+      { label: "How you pay", values: ["Free", "Monthly", "Monthly", "Once"] },
+      { label: "Ends if you stop paying", values: [false, "After 30 days", "After 30 days", false] },
+    ],
+  },
   {
     group: "Learning",
     rows: [
-      { label: "DJ Fundamentals course", values: [true, true, true] },
-      { label: "Beginner & Intermediate courses", values: ["Free lessons", true, true] },
-      { label: "Advanced courses", values: [false, false, true] },
-      { label: "Future courses", values: [false, "Beginner & Intermediate", true] },
-      { label: "Practice tracks, stems & cue sheets", values: [false, true, true] },
-      { label: "Certificates of completion", values: [false, true, true] },
+      { label: "DJ Fundamentals course", values: [true, true, true, true] },
+      { label: "Beginner & Intermediate courses", values: ["Free lessons", true, true, true] },
+      { label: "Advanced courses", values: [false, false, true, true] },
+      { label: "Future courses", values: [false, "Beginner & Intermediate", true, true] },
+      { label: "Practice tracks, stems & cue sheets", values: [false, true, true, true] },
+      { label: "Certificates of completion", values: [false, true, true, true] },
     ],
   },
   {
     group: "Feedback & coaching",
     rows: [
-      { label: "Mix feedback from instructors", values: [false, "2 recordings", "Unlimited"] },
-      { label: "Monthly live Q&A", values: [false, false, true] },
-      { label: "Press-kit & booking review", values: [false, false, true] },
+      { label: "Mix feedback from instructors", values: [false, "2 recordings", "Unlimited", "Unlimited"] },
+      { label: "Monthly live Q&A", values: [false, false, true, true] },
+      { label: "Press-kit & booking review", values: [false, false, true, true] },
     ],
   },
   {
     group: "Community",
     rows: [
-      { label: "Community access", values: [true, true, true] },
-      { label: "Progress tracking & notes", values: [true, true, true] },
+      { label: "Community access", values: [true, true, true, true] },
+      { label: "Progress tracking & notes", values: [true, true, true, true] },
     ],
   },
 ];

@@ -5,6 +5,7 @@ import { useState } from "react";
 import { left, meterLabel } from "@/lib/allowances";
 import { downloadHref, fileExt, fileKind, formatSize, planLabel, resourcePath, type StorePlan, type StoreResource } from "@/lib/store";
 import type { EditField } from "@/lib/edits";
+import { PLAN_RANK } from "@/lib/plan-tiers";
 import type { UpgradeContext, UpgradeReason } from "@/lib/upgrade";
 import { ArrowRightIcon, DownloadIcon, LockIcon, PencilIcon } from "../icons";
 import { RequestEditDialog } from "../edits/request-edit-dialog";
@@ -17,7 +18,6 @@ import { DownloadStateIcon, useDownload } from "./download-progress";
 const primary =
   "inline-flex h-11 items-center justify-center gap-2 rounded-full px-5 text-[0.9375rem] font-semibold whitespace-nowrap transition focus-visible:ring-2 focus-visible:ring-brand/50 focus-visible:outline-none";
 
-const PLAN_RANK: Record<StorePlan, number> = { "warm-up": 0, resident: 1, headliner: 2 };
 
 /**
  * The main button on a resource page: Download (all), Log in, or Unlock, with

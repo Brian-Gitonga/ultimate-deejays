@@ -18,7 +18,7 @@ export type MixSubmission = {
 };
 
 /** How many mixes each plan can send for feedback (null = unlimited). */
-export const mixAllowance = { "warm-up": 0, resident: 2, headliner: null } as const;
+export const mixAllowance = { "warm-up": 0, resident: 2, headliner: null, lifetime: null } as const;
 
 /** "soundcloud.com/x" → "SoundCloud", for labels. */
 export function mixHost(link: string) {

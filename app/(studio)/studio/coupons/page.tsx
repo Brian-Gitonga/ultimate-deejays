@@ -20,7 +20,7 @@ export default async function StudioCouponsPage() {
           seed={coupons}
           today={new Date().toISOString().slice(0, 10)}
           currency={settings.general.currency}
-          plans={{ resident: prices.resident, headliner: prices.headliner }}
+          plans={{ resident: prices.resident, headliner: prices.headliner, lifetime: prices.lifetime }}
           affiliateDiscount={settings.affiliates.customerDiscount}
         />
       </div>

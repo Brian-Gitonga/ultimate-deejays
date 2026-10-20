@@ -1,5 +1,6 @@
 "use client";
 
+import { priceSuffix } from "@/lib/plan-tiers";
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
@@ -20,6 +21,8 @@ export const planTone: Record<Plan["slug"], { bar: string; pill: string }> = {
   "warm-up": { bar: "bg-[#9fdcc4] dark:bg-[#2e6b58]", pill: "bg-foreground/[0.06] text-foreground/80" },
   resident: { bar: "bg-[#00a76f]", pill: "bg-brand/10 text-brand-deep dark:text-brand" },
   headliner: { bar: "bg-[#00584c] dark:bg-[#8ff0c9]", pill: "bg-[#00584c] text-white dark:bg-[#8ff0c9] dark:text-neutral-900" },
+  // Paid once, for good: set apart in gold.
+  lifetime: { bar: "bg-accent-yellow", pill: "bg-accent-yellow text-neutral-900" },
 };
 
 function daysAgo(iso: string) {
@@ -316,7 +319,7 @@ function StudentDrawer({
                 <Select aria-label="Change plan" value={s.plan} onChange={(e) => onPlanChange(e.target.value as Plan["slug"])}>
                   {plans.map((p) => (
                     <option key={p.slug} value={p.slug}>
-                      {p.name} {priceOf(p.slug) ? `(${money(priceOf(p.slug))} one-time)` : "(free)"}
+                      {p.name} {priceOf(p.slug) ? `(${money(priceOf(p.slug))} ${priceSuffix(p.slug)})` : p.slug === "warm-up" ? "(free)" : ""}
                     </option>
                   ))}
                 </Select>

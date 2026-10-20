@@ -23,6 +23,8 @@ export function toTransaction(row: PaymentRow): Transaction {
     country: row.country,
     plan: row.plan,
     kind: row.kind as Transaction["kind"],
+    // Before migration 021 every payment was paid once.
+    billing: row.billing === "monthly" ? "monthly" : "once",
     amount: Number(row.amount),
     fee: Number(row.fee),
     method: row.method,

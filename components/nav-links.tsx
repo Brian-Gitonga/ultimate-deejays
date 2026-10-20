@@ -4,8 +4,9 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { NavLink } from "./site-header";
 
+// "/" (Home) only on the homepage itself.
 export const isActive = (pathname: string, href: string) =>
-  pathname === href || pathname.startsWith(`${href}/`);
+  pathname === href || (href !== "/" && pathname.startsWith(`${href}/`));
 
 export function NavLinks({ links }: { links: NavLink[] }) {
   const pathname = usePathname();

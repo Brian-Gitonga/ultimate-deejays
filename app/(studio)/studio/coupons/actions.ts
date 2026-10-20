@@ -14,7 +14,7 @@ const schema = z
     description: z.string().trim().max(200, "Keep the note to 200 characters."),
     discountType: z.enum(["percent", "fixed"]),
     discountValue: z.number().positive("Enter a discount above 0."),
-    plans: z.array(z.enum(["resident", "headliner"])),
+    plans: z.array(z.enum(["resident", "headliner", "lifetime"])),
     emails: z.array(z.email("One of the emails doesn't look right. Check the list.")).max(200, "Up to 200 emails per code."),
     maxRedemptions: z.number().int().positive("Use a limit of at least 1, or leave it empty.").nullable(),
     oncePerCustomer: z.boolean(),

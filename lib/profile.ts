@@ -36,7 +36,7 @@ export type Profile = {
   soundcloud: string;
   /** Public URL (Supabase Storage or Google), or null for initials */
   avatarUrl: string | null;
-  /** For text messages about their edits: +254712345678, or "" */
+  /** Where the team messages them about their edits: +254712345678, or "" */
   phone: string;
 };
 

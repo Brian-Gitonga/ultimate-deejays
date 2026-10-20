@@ -205,7 +205,7 @@ with checks (step, item, ok, fix) as (
         'Run migrations/…_edits_allowances.sql'),
     (16, 'Every plan has an allowance row',
         case when to_regclass('public.plan_allowances') is null then false
-             else query_to_xml('select count(*) = 3 as ok from public.plan_allowances', false, true, '')::text like '%<ok>true</ok>%'
+             else query_to_xml('select count(*) >= 3 as ok from public.plan_allowances', false, true, '')::text like '%<ok>true</ok>%'
         end,
         'Re-run migrations/…_edits_allowances.sql (it adds the default rows)'),
     (16, 'Functions my_allowance(), request_edit(), studio_edit_requests() exist',
@@ -230,7 +230,42 @@ with checks (step, item, ok, fix) as (
     -- 017 · a member's own downloads
     (17, 'Function my_downloads() exists (Account → Overview)',
         to_regprocedure('public.my_downloads(integer)') is not null,
-        'Run migrations/…_my_downloads.sql')
+        'Run migrations/…_my_downloads.sql'),
+
+    -- 018 · preview videos
+    (18, 'Column store_resources.preview_video exists',
+        exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'store_resources' and column_name = 'preview_video'),
+        'Run migrations/…_store_preview_video.sql'),
+
+    -- 019 · lower thirds hero
+    (19, 'Column store_resources.hero_featured exists',
+        exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'store_resources' and column_name = 'hero_featured'),
+        'Run migrations/…_lower_thirds_hero.sql'),
+
+    -- 020 · the Lifetime plan
+    (20, 'Plan level lifetime exists',
+        exists (select 1 from pg_enum e join pg_type t on t.oid = e.enumtypid where t.typname = 'plan_tier' and e.enumlabel = 'lifetime'),
+        'Run migrations/…_lifetime_plan.sql on its own, then 021'),
+
+    -- 021 · monthly plans
+    (21, 'Profiles have base_plan and plan_expires_at; payments have billing',
+        exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'profiles' and column_name = 'plan_expires_at')
+        and exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'profiles' and column_name = 'base_plan')
+        and exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'payments' and column_name = 'billing'),
+        'Run migrations/…_monthly_plans.sql (after 020)'),
+    (21, 'Functions expire_plans() and expire_my_plan() exist',
+        to_regprocedure('public.expire_plans()') is not null and to_regprocedure('public.expire_my_plan()') is not null,
+        'Run migrations/…_monthly_plans.sql (after 020)'),
+    (21, 'Lifetime has an allowance row',
+        case when to_regclass('public.plan_allowances') is null then false
+             else query_to_xml($q$select count(*) = 1 as ok from public.plan_allowances where plan::text = 'lifetime'$q$, false, true, '')::text like '%<ok>true</ok>%'
+        end,
+        'Run migrations/…_monthly_plans.sql (after 020)'),
+    (21, 'Monthly plans end on time (hourly job; optional, the site also ends them on visit)',
+        case when to_regclass('cron.job') is null then false
+             else query_to_xml($q$select count(*) = 1 as ok from cron.job where jobname = 'expire-monthly-plans'$q$, false, true, '')::text like '%<ok>true</ok>%'
+        end,
+        'Enable pg_cron (Database → Extensions), then re-run migrations/…_monthly_plans.sql')
 )
 select
   case when ok then '✅' else '❌' end as status,

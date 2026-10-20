@@ -21,8 +21,12 @@ export type Viewer = {
   id: string;
   email: string;
   role: Enums<"app_role">;
-  /** Highest plan bought or granted */
+  /** The plan they have now */
   plan: Enums<"plan_tier">;
+  /** What they keep when a monthly plan ends: Warm-Up, a plan paid for once, or Lifetime (migration 021) */
+  basePlan: Enums<"plan_tier">;
+  /** When their monthly plan ends; null = it doesn't */
+  planEndsAt: string | null;
   status: "active" | "suspended";
   profile: Profile;
   /** Their affiliate application, or null if they haven't applied */
@@ -65,12 +69,28 @@ export const getViewer = cache(async (): Promise<Viewer | null> => {
     () => {},
   );
 
+  // A monthly plan whose 30 days are up: back to the base plan now (the database also does it hourly).
+  const basePlan = profile.data.base_plan ?? "warm-up";
+  let plan = profile.data.plan;
+  let planEndsAt = profile.data.plan_expires_at ?? null;
+  if (planEndsAt && Date.parse(planEndsAt) <= Date.now()) {
+    plan = basePlan;
+    planEndsAt = null;
+    // Awaited, so the database checks that follow in this request see it too. (Before migration 021 this just fails.)
+    await supabase.rpc("expire_my_plan").then(
+      () => {},
+      () => {},
+    );
+  }
+
   const a = affiliate.data;
   return {
     id,
     email: profile.data.email || auth.claims.email || "",
     role: profile.data.role,
-    plan: profile.data.plan,
+    plan,
+    basePlan,
+    planEndsAt,
     status: profile.data.status === "suspended" ? "suspended" : "active",
     profile: toProfile(profile.data),
     affiliate: a

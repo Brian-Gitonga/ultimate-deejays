@@ -3,7 +3,7 @@
 import type { MyAllowance } from "@/lib/allowances";
 import { getViewer } from "@/lib/dal";
 import { getMyAllowance } from "@/lib/db/allowances";
-import type { StorePlan } from "@/lib/store";
+import type { PlanSlug } from "@/lib/plan-tiers";
 
 /*
  * The store pages are cached and the same for everyone, so once they load
@@ -14,7 +14,7 @@ import type { StorePlan } from "@/lib/store";
 
 export type StoreViewer =
   | { signedIn: false }
-  | { signedIn: true; id: string; plan: StorePlan; isAdmin: boolean; allowance: MyAllowance | null; /** Saved for edit texts, +254… or "" */ phone: string };
+  | { signedIn: true; id: string; plan: PlanSlug; isAdmin: boolean; allowance: MyAllowance | null; /** Saved for edit requests, +254… or "" */ phone: string };
 
 export async function getStoreViewer(): Promise<StoreViewer> {
   const viewer = await getViewer();

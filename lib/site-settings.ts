@@ -6,6 +6,25 @@ import { plans, type Plan } from "./plans";
  * Defaults fill in anything missing.
  */
 
+export type Announcement = {
+  enabled: boolean;
+  /** "We make custom DJ mixes for your YouTube channel" */
+  message: string;
+  /** Words to stand out after the message, e.g. "30% off this week" (optional) */
+  highlight: string;
+  /** Button text, e.g. "Chat on WhatsApp" */
+  ctaLabel: string;
+  /** whatsapp = opens a chat with the site's number (General → Phone); link = any page or URL */
+  ctaKind: "whatsapp" | "link";
+  /** ctaKind link: "/pricing" or "https://…" */
+  ctaLink: string;
+  /** ctaKind whatsapp: the message their chat starts with */
+  whatsappText: string;
+  /** An ISO date: a countdown shows, and the bar goes away then. "" = no end */
+  endsAt: string;
+  style: "brand" | "night" | "gold";
+};
+
 export type PlanSettings = Pick<Plan, "slug" | "name" | "tagline" | "price" | "cta" | "highlights"> & { featured: boolean };
 
 export type SiteSettings = {
@@ -49,6 +68,8 @@ export type SiteSettings = {
     terms: string;
   };
   notifications: { email: string; newSale: boolean; refund: boolean; newStudent: boolean; affiliateApplication: boolean; payoutSent: boolean; weeklyReport: boolean };
+  /** The bar above the menu on every page (components/announcement-bar.tsx) */
+  announcement: Announcement;
   updatedAt: string;
 };
 
@@ -71,8 +92,8 @@ export const defaultSettings: SiteSettings = {
   },
   plans: plans.map(({ slug, name, tagline, price, cta, featured, highlights }) => ({ slug, name, tagline, price, cta, featured: !!featured, highlights })),
   pricing: {
-    heading: "Pay once. Keep mixing forever.",
-    intro: "No subscriptions and no monthly fees. Start free, then unlock the courses you need when you're ready to level up.",
+    heading: "Start free. Go further when you're ready.",
+    intro: "Pay monthly with M-Pesa or card, with nothing that renews by itself, or pay once for Lifetime and keep everything for good.",
     guaranteeDays: 30,
     showComparison: true,
     upgradeCredit: true,
@@ -100,11 +121,22 @@ export const defaultSettings: SiteSettings = {
     terms: "Promote Ultimate Deejays honestly. No paid ads on our brand name, no coupon sites and no spam. Commission is paid monthly on sales that aren't refunded.",
   },
   notifications: { email: "hello@ultimatedeejays.com", newSale: true, refund: true, newStudent: false, affiliateApplication: true, payoutSent: true, weeklyReport: true },
+  announcement: {
+    enabled: true,
+    message: "We make custom DJ mixes for YouTube channels and events",
+    highlight: "",
+    ctaLabel: "Chat on WhatsApp",
+    ctaKind: "whatsapp",
+    ctaLink: "/contact",
+    whatsappText: "Hi Ultimate Deejays! I'd like a custom DJ mix.",
+    endsAt: "",
+    style: "brand",
+  },
   updatedAt: "2026-09-01T00:00:00.000Z",
 };
 
 type Sections = Omit<SiteSettings, "id" | "updatedAt">;
-const sectionKeys = ["general", "plans", "pricing", "blog", "payments", "affiliates", "notifications"] as const satisfies readonly (keyof Sections)[];
+const sectionKeys = ["general", "plans", "pricing", "blog", "payments", "affiliates", "notifications", "announcement"] as const satisfies readonly (keyof Sections)[];
 
 const isObject = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
 
@@ -125,6 +157,10 @@ export function mergeSettings(saved: unknown, updatedAt: string): SiteSettings {
       (merged as Record<string, unknown>)[key] = { ...(defaultSettings[key] as object), ...value };
     }
   }
+  // The pricing copy from before monthly plans, if it was never changed: today's default instead.
+  const oldCopy = { heading: "Pay once. Keep mixing forever.", intro: "No subscriptions and no monthly fees. Start free, then unlock the courses you need when you're ready to level up." };
+  if (merged.pricing.heading === oldCopy.heading) merged.pricing = { ...merged.pricing, heading: defaultSettings.pricing.heading };
+  if (merged.pricing.intro === oldCopy.intro) merged.pricing = { ...merged.pricing, intro: defaultSettings.pricing.intro };
   merged.general.socials = { ...defaultSettings.general.socials, ...(isObject(merged.general.socials) ? merged.general.socials : {}) };
   return merged;
 }

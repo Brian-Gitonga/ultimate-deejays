@@ -10,8 +10,10 @@
  */
 
 import type { EditField } from "./edits";
+import { includesPlan, type ContentPlan, type PlanSlug } from "./plan-tiers";
 
-export type StorePlan = "warm-up" | "resident" | "headliner";
+/** The lowest plan a store item needs (Lifetime gets everything). */
+export type StorePlan = ContentPlan;
 
 export const storeCategories = [
   { slug: "practice-tracks", name: "Practice tracks" },
@@ -46,6 +48,10 @@ export type StoreResource = {
   thumbnail: string;
   /** Optional YouTube preview shown on the resource page */
   previewUrl: string;
+  /** The uploaded preview clip's address (/api/store/preview/…), or "": plays on hover and on the resource page */
+  previewVideo: string;
+  /** Picked for the autoplaying carousel at the top of /lower-thirds (migration 019) */
+  heroFeatured: boolean;
   /** The lowest plan that can download it */
   access: StorePlan;
   /** Also listed on /lower-thirds, where its page lives */
@@ -103,12 +109,11 @@ export function filtersFromSearch(params: SearchParams): { filters: StoreFilters
 /** Where a resource's page lives: /lower-thirds/<slug> for lower thirds, /store/<slug> for the rest. */
 export const resourcePath = (slug: string, lowerThird: boolean) => `${lowerThird ? "/lower-thirds" : "/store"}/${slug}`;
 
-const PLAN_RANK: Record<StorePlan, number> = { "warm-up": 0, resident: 1, headliner: 2 };
 
 /** Whether someone on `plan` (or an admin) can download a resource needing `access`. */
-export const canDownload = (access: StorePlan, plan: StorePlan, isAdmin = false) => isAdmin || PLAN_RANK[plan] >= PLAN_RANK[access];
+export const canDownload = (access: StorePlan, plan: PlanSlug, isAdmin = false) => isAdmin || includesPlan(plan, access);
 
-export const planLabel = (plan: StorePlan) => (plan === "warm-up" ? "Free" : plan === "resident" ? "Resident" : "Headliner");
+export const planLabel = (plan: PlanSlug) => ({ "warm-up": "Free", resident: "Resident", headliner: "Headliner", lifetime: "Lifetime" })[plan];
 
 /** "Kick Drum.WAV" → "WAV" */
 export function fileExt(name: string) {
@@ -192,6 +197,19 @@ export function downloadHref(slugs: string[], fileIds: string[] = []) {
  * starts, and the page watches for it to stop saying "Preparing…".
  */
 export const DOWNLOAD_COOKIE = "ud-download";
+
+/**
+ * Where a resource's preview clip plays from: a route that hands out a signed
+ * link (the storage is private). The version changes with the file, so a
+ * replaced clip isn't served from the browser's cache.
+ */
+export const previewVideoHref = (slug: string, path: string) => (path ? `/api/store/preview/${slug}?v=${encodeURIComponent(path.slice(-12))}` : "");
+
+/** Preview clips: what browsers play everywhere, and how big one can be. */
+export const PREVIEW_VIDEO_TYPES = ["video/mp4", "video/webm"];
+export const PREVIEW_VIDEO_MAX_BYTES = 100 * 1024 * 1024;
+/** Above this, a hover preview starts noticeably late. */
+export const PREVIEW_VIDEO_GOOD_BYTES = 15 * 1024 * 1024;
 export const isDownloadToken = (value: string | null): value is string => !!value && /^[a-z0-9]{8,32}$/.test(value);
 
 // ── Studio ──────────────────────────────────────────────────────────────────
@@ -215,6 +233,10 @@ export type StudioStoreResource = {
   category: string;
   thumbnail: string;
   previewUrl: string;
+  /** Where the uploaded preview clip lives (r2:… or a store bucket path), or "" (migration 018) */
+  previewVideo: string;
+  /** In the /lower-thirds hero carousel (migration 019) */
+  heroFeatured: boolean;
   access: StorePlan;
   lowerThird: boolean;
   /** null = made by the team */

@@ -1,5 +1,6 @@
 "use client";
 
+import type { PlanSlug } from "@/lib/plan-tiers";
 import { createContext, useContext, useMemo, type ReactNode } from "react";
 import { compactMoney, moneyFormatter } from "@/lib/money";
 import { defaultSettings } from "@/lib/site-settings";
@@ -10,7 +11,7 @@ import { defaultSettings } from "@/lib/site-settings";
  * here, so every table, chart and form shows what the checkout charges.
  */
 
-export type PlanPrice = { slug: "warm-up" | "resident" | "headliner"; name: string; price: number };
+export type PlanPrice = { slug: PlanSlug; name: string; price: number };
 
 const defaults = {
   currency: defaultSettings.general.currency as string,

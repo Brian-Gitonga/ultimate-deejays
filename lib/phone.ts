@@ -1,5 +1,5 @@
 /*
- * Phone numbers for text messages, kept in international format
+ * Phone numbers members give for their edits, kept in international format
  * (+254712345678). Kenyan numbers can be typed the local way.
  */
 

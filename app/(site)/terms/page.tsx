@@ -20,7 +20,7 @@ export default async function TermsPage() {
       updated="2026-10-05"
       summary={
         <>
-          The short version: create one account for yourself, pay once for a plan and keep it for life, use the lessons and downloads for your own
+          The short version: create one account for yourself, pay for a plan monthly or once for Lifetime, use the lessons and downloads for your own
           learning and gigs, and treat other DJs with respect. The full terms are below.
         </>
       }
@@ -47,11 +47,13 @@ export default async function TermsPage() {
         <h2>3. Plans and payments</h2>
         <ul>
           <li>
-            Prices are shown in {currencyName(general.currency)} and include any taxes we are required to charge. The Warm-Up plan is free; paid plans
-            are a <strong>one-time payment</strong> with lifetime access to what the plan includes. Nothing renews automatically.
+            Prices are shown in {currencyName(general.currency)} and include any taxes we are required to charge. The Warm-Up plan is free. Monthly
+            plans give <strong>30 days of access per payment</strong>; they don&apos;t renew automatically, and when the 30 days end you go back to
+            the free plan (or to a plan you paid for once) until you pay again. The Lifetime plan is a <strong>one-time payment</strong> with access to
+            what it includes for as long as the service runs. Plans bought as one-time payments before monthly plans started stay yours.
           </li>
           <li>Payments are processed by Paystack (card, M-Pesa and other methods). We never see or store your full card details.</li>
-          {pricing.upgradeCredit && <li>When you upgrade, you only pay the difference between your current plan and the new one.</li>}
+          {pricing.upgradeCredit && <li>When you move up from a monthly plan, the days you haven&apos;t used come off the price; Lifetime also takes off what you paid once before.</li>}
           <li>Discount codes have their own conditions (dates, plans, number of uses) and can&apos;t be exchanged for cash.</li>
           <li>
             Refunds are covered by our <Link href="/refunds">Refund Policy</Link>.

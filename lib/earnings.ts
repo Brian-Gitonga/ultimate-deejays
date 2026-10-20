@@ -25,8 +25,10 @@ export type Transaction = {
   avatar: string | null;
   country: string;
   plan: Plan["slug"];
-  /** "upgrade" = paid the difference to move up a plan */
-  kind: "purchase" | "upgrade";
+  /** "upgrade" = moved up a plan; "renewal" = another month of the same plan */
+  kind: "purchase" | "upgrade" | "renewal";
+  /** monthly = 30 days of the plan; once = Lifetime, or bought before plans went monthly */
+  billing: "monthly" | "once";
   amount: number;
   fee: number;
   method: PaymentMethod;

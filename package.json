@@ -21,6 +21,7 @@
     "@supabase/supabase-js": "^2.117.2",
     "aws4fetch": "^1.0.20",
     "client-zip": "^2.5.1",
+    "mediabunny": "^1.61.0",
     "next": "16.3.6",
     "react": "19.2.8",
     "react-dom": "19.2.8",

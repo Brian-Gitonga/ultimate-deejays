@@ -1,5 +1,6 @@
 "use client";
 
+import { priceSuffix } from "@/lib/plan-tiers";
 import Link from "next/link";
 import { useState, type ComponentType, type ReactNode, type SVGProps } from "react";
 import { postCategories } from "@/lib/post-categories";
@@ -8,12 +9,14 @@ import type { PlanAllowance } from "@/lib/allowances";
 import { CURRENCIES, currencySymbol, formatMoney } from "@/lib/money";
 import { defaultSettings, type PlanSettings, type SiteSettings } from "@/lib/site-settings";
 import { runAction } from "@/lib/studio-store";
+import { AnnouncementContent } from "../announcement-bar";
 import {
   ArrowUpRightIcon,
   BellIcon,
   CheckIcon,
   HandshakeIcon,
   InstagramIcon,
+  MegaphoneIcon,
   PencilIcon,
   PlusIcon,
   SettingsIcon,
@@ -27,7 +30,7 @@ import { ListEditor } from "./list-editor";
 import { useToast } from "./manage-table";
 import { Field, Input, Panel, Select, Switch, Textarea, primaryButton, secondaryButton } from "./ui";
 
-export type SectionKey = "general" | "pricing" | "blog" | "payments" | "affiliates" | "notifications";
+export type SectionKey = "general" | "pricing" | "blog" | "payments" | "affiliates" | "notifications" | "announcement";
 type Icon = ComponentType<SVGProps<SVGSVGElement>>;
 
 const sections: { key: SectionKey; label: string; hint: string; icon: Icon }[] = [
@@ -37,6 +40,7 @@ const sections: { key: SectionKey; label: string; hint: string; icon: Icon }[] =
   { key: "payments", label: "Payments & payouts", hint: "Checkout, refunds and payouts", icon: WalletIcon },
   { key: "affiliates", label: "Affiliate program", hint: "Commission and rules", icon: HandshakeIcon },
   { key: "notifications", label: "Notifications", hint: "Emails sent to you", icon: BellIcon },
+  { key: "announcement", label: "Announcement bar", hint: "The offer above the menu", icon: MegaphoneIcon },
 ];
 
 
@@ -59,6 +63,13 @@ function withDefaults(s?: Partial<SiteSettings>): SiteSettings {
   };
 }
 
+/** An ISO date as a datetime-local value, in this computer's time zone. */
+function toLocalInput(iso: string) {
+  if (!iso || Number.isNaN(Date.parse(iso))) return "";
+  const d = new Date(iso);
+  return new Date(d.getTime() - d.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
+}
+
 function validate(s: SiteSettings) {
   const e: Record<string, string> = {};
   if (!s.general.siteName.trim()) e["general.siteName"] = "Enter the site name";
@@ -75,6 +86,11 @@ function validate(s: SiteSettings) {
   if (s.affiliates.customerDiscount < 0 || s.affiliates.customerDiscount > 90) e["affiliates.customerDiscount"] = "Use a value from 0% to 90%";
   if (!s.payments.card && !s.payments.paypal) e["payments.methods"] = "Keep at least one way to pay";
   if (!emailOk(s.notifications.email)) e["notifications.email"] = "Enter a valid email address";
+  const a = s.announcement;
+  if (a.enabled && !a.message.trim()) e["announcement.message"] = "Write the announcement, or switch the bar off";
+  if (a.message.length > 140) e["announcement.message"] = "Keep it to 140 characters";
+  if (a.enabled && a.ctaLabel.trim() && a.ctaKind === "link" && !/^(\/(?!\/)|https?:\/\/)\S+$/.test(a.ctaLink.trim())) e["announcement.ctaLink"] = "Start with / for a page here, or https://";
+  if (a.enabled && a.ctaLabel.trim() && a.ctaKind === "whatsapp" && !s.general.phone.replace(/\D/g, "")) e["announcement.ctaKind"] = "Add your WhatsApp number in General → Phone first";
   return e;
 }
 
@@ -303,7 +319,7 @@ export function SettingsManager({
                 <Panel
                   key={p.slug}
                   title={p.name || "Untitled plan"}
-                  description={p.price ? `${money(p.price)} one-time` : "Free plan"}
+                  description={p.price ? `${money(p.price)} ${priceSuffix(p.slug)}` : p.slug === "warm-up" ? "Free plan" : "Not for sale until it has a price"}
                   actions={
                     <label className="flex shrink-0 cursor-pointer items-center gap-2 text-sm text-muted-foreground">
                       <input
@@ -582,6 +598,77 @@ export function SettingsManager({
           </Panel>
         )}
 
+        {section === "announcement" && (
+          <>
+            <Panel title="Preview" description="How it looks above the menu. Visitors can close it; a changed message shows again.">
+              <div className="-mx-1 overflow-hidden rounded-xl ring-1 ring-border">
+                {draft.announcement.message.trim() ? (
+                  <AnnouncementContent announcement={draft.announcement} phone={draft.general.phone} onClose={() => {}} />
+                ) : (
+                  <p className="p-4 text-sm text-muted-foreground">Write a message below to see it.</p>
+                )}
+              </div>
+              {!draft.announcement.enabled && <p className="mt-3 text-sm text-muted-foreground">The bar is switched off: visitors don&apos;t see it.</p>}
+            </Panel>
+
+            <Panel title="Announcement bar" description="A short line above the menu on every page: an offer, news or a service, with one button.">
+              <Switch id="ann-enabled" label="Show the bar" checked={draft.announcement.enabled} onChange={(on) => patch("announcement", { enabled: on })} />
+              <div className="mt-6 grid gap-5 border-t border-border pt-5 sm:grid-cols-2">
+                <div className="sm:col-span-2">
+                  <Field label="Message" htmlFor="ann-message" error={err("announcement.message")} hint={`${draft.announcement.message.length}/140 · e.g. “We make custom DJ mixes for YouTube channels and events”`}>
+                    <Input id="ann-message" maxLength={140} value={draft.announcement.message} onChange={(e) => patch("announcement", { message: e.target.value })} aria-invalid={!!err("announcement.message")} />
+                  </Field>
+                </div>
+                <Field label="Highlight" htmlFor="ann-highlight" hint="Optional words after it that stand out, e.g. “30% off this week”.">
+                  <Input id="ann-highlight" maxLength={40} value={draft.announcement.highlight} onChange={(e) => patch("announcement", { highlight: e.target.value })} />
+                </Field>
+                <Field label="Style" htmlFor="ann-style">
+                  <Select id="ann-style" value={draft.announcement.style} onChange={(e) => patch("announcement", { style: e.target.value as SiteSettings["announcement"]["style"] })}>
+                    <option value="brand">Green (brand)</option>
+                    <option value="night">Night</option>
+                    <option value="gold">Gold</option>
+                  </Select>
+                </Field>
+                <Field label="Button text" htmlFor="ann-cta" hint="Leave empty for no button.">
+                  <Input id="ann-cta" maxLength={30} value={draft.announcement.ctaLabel} onChange={(e) => patch("announcement", { ctaLabel: e.target.value })} />
+                </Field>
+                <Field label="Button opens" htmlFor="ann-kind" error={err("announcement.ctaKind")}>
+                  <Select id="ann-kind" value={draft.announcement.ctaKind} onChange={(e) => patch("announcement", { ctaKind: e.target.value as "whatsapp" | "link" })}>
+                    <option value="whatsapp">A WhatsApp chat with you</option>
+                    <option value="link">A page or link</option>
+                  </Select>
+                </Field>
+                <div className="sm:col-span-2">
+                  {draft.announcement.ctaKind === "whatsapp" ? (
+                    <Field label="Their first message" htmlFor="ann-wa" hint={`Opens WhatsApp to ${draft.general.phone || "your number (General → Phone)"} with this typed in, ready to send.`}>
+                      <Input id="ann-wa" maxLength={300} value={draft.announcement.whatsappText} onChange={(e) => patch("announcement", { whatsappText: e.target.value })} />
+                    </Field>
+                  ) : (
+                    <Field label="Link" htmlFor="ann-link" error={err("announcement.ctaLink")} hint="A page here (/pricing, /store) or a full link (https://…).">
+                      <Input id="ann-link" value={draft.announcement.ctaLink} onChange={(e) => patch("announcement", { ctaLink: e.target.value })} aria-invalid={!!err("announcement.ctaLink")} />
+                    </Field>
+                  )}
+                </div>
+                <Field label="Offer ends" htmlFor="ann-ends" hint="Optional. Shows a countdown, and the bar goes away by itself then. Your local time.">
+                  <div className="flex gap-2">
+                    <Input
+                      id="ann-ends"
+                      type="datetime-local"
+                      value={toLocalInput(draft.announcement.endsAt)}
+                      onChange={(e) => patch("announcement", { endsAt: e.target.value ? new Date(e.target.value).toISOString() : "" })}
+                    />
+                    {draft.announcement.endsAt && (
+                      <button type="button" onClick={() => patch("announcement", { endsAt: "" })} className={`${secondaryButton} h-11 shrink-0`}>
+                        Clear
+                      </button>
+                    )}
+                  </div>
+                </Field>
+              </div>
+            </Panel>
+          </>
+        )}
+
         <div className={`sticky bottom-4 z-20 transition duration-200 ${dirty ? "translate-y-0 opacity-100" : "pointer-events-none translate-y-4 opacity-0"}`} aria-hidden={!dirty}>
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-card/95 p-3 pl-5 shadow-[0_12px_40px_-12px_rgb(0_0_0/0.35)] backdrop-blur">
             <p className="text-sm text-foreground">{showErrors && errorCount ? `${errorCount} ${errorCount === 1 ? "field needs" : "fields need"} attention` : "You have unsaved changes"}</p>
@@ -664,7 +751,7 @@ function PlanPreview({ plan, price }: { plan: PlanSettings; price: string }) {
       <p className={`mt-1 text-xs ${f ? "text-white/80" : "text-muted-foreground"}`}>{plan.tagline}</p>
       <p className="mt-4 flex items-baseline gap-1.5">
         <span className={`text-3xl font-bold tracking-tight ${f ? "text-white" : "text-foreground"}`}>{price}</span>
-        <span className={`text-xs ${f ? "text-white/75" : "text-muted-foreground"}`}>{plan.price === 0 ? "forever" : "one-time"}</span>
+        <span className={`text-xs ${f ? "text-white/75" : "text-muted-foreground"}`}>{priceSuffix(plan.slug)}</span>
       </p>
       <span className={`mt-4 inline-flex h-9 items-center justify-center rounded-lg text-sm font-semibold ${f ? "bg-white text-neutral-900" : "bg-[#18181b] text-white dark:bg-foreground dark:text-background"}`}>{plan.cta || "Button"}</span>
       <ul className={`mt-4 space-y-2 border-t pt-4 text-xs ${f ? "border-white/15" : "border-border"}`}>

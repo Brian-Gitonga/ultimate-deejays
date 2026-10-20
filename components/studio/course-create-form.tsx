@@ -149,7 +149,7 @@ export function CourseCreateForm({ instructors, takenSlugs }: { instructors: Ins
               <legend className="mb-1.5 text-sm font-medium text-foreground">
                 Who gets access <span className="text-red-600 dark:text-red-400">*</span>
               </legend>
-              <p className="mb-3 text-xs text-muted-foreground">Courses are unlocked by a one-time plan, not sold one by one.</p>
+              <p className="mb-3 text-xs text-muted-foreground">Courses are unlocked by a plan, not sold one by one. Lifetime includes every course.</p>
               <AccessPicker value={draft.access} onChange={(plan) => set("access", plan)} />
             </fieldset>
 

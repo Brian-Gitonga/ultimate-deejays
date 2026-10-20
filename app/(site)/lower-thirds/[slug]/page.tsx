@@ -6,6 +6,7 @@ import { getLowerThirds, getStoreResource } from "@/lib/db/store";
 import { getUpgradeContext } from "@/lib/db/upgrade";
 import { siteName } from "@/lib/site";
 import { resourcePath } from "@/lib/store";
+import { MediaPreconnect } from "@/components/store/media-preconnect";
 
 // Published lower thirds are built ahead of time; new ones render on first visit.
 export async function generateStaticParams() {
@@ -37,5 +38,10 @@ export default async function LowerThirdPage({ params }: PageProps<"/lower-third
   if (!resource) notFound();
   // Switched off in the studio: it's a regular store download again.
   if (!resource.lowerThird) redirect(resourcePath(resource.slug, false));
-  return <StoreResourceView resource={resource} all={all} now={new Date().getTime()} edits={edits} upgrade={upgrade} />;
+  return (
+    <>
+      <MediaPreconnect when={!!resource.previewVideo} />
+      <StoreResourceView resource={resource} all={all} now={new Date().getTime()} edits={edits} upgrade={upgrade} />
+    </>
+  );
 }

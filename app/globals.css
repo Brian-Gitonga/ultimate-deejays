@@ -111,6 +111,17 @@
   /* Dialogs (the upgrade prompt): the backdrop fades in, the panel rises a little. */
   --animate-fade-in: fade-in 0.15s ease-out both;
   --animate-dialog-in: dialog-in 0.22s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  /* A preview clip loading: a highlight sweeping along the line under the cover. */
+  --animate-sweep: sweep 1.1s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+
+  @keyframes sweep {
+    from {
+      transform: translateX(-100%);
+    }
+    to {
+      transform: translateX(250%);
+    }
+  }
 
   @keyframes fade-in {
     from {
@@ -330,4 +341,60 @@ body {
   background-color: currentColor;
   -webkit-mask: url("/brand/mark.svg") center / contain no-repeat;
   mask: url("/brand/mark.svg") center / contain no-repeat;
+}
+
+
+/*
+ * The announcement bar (components/announcement-bar.tsx). Whether it's open
+ * is kept on <html data-announce>, set by a script before the bar is drawn:
+ * open = in place from the first frame; hidden = closed for this
+ * announcement; nothing yet = a first visit, opened (sliding down) once the
+ * page has loaded. Closing slides it back up. Height animates through the
+ * grid row (0fr to 1fr), so it pushes the menu down smoothly.
+ */
+.announce {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.55s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.announce > * {
+  min-height: 0;
+  overflow: hidden;
+}
+.announce [role="region"] {
+  opacity: 0;
+  transform: translateY(-0.5rem);
+  transition:
+    opacity 0.35s ease-out 0.12s,
+    transform 0.5s cubic-bezier(0.22, 1, 0.36, 1) 0.08s;
+}
+:root[data-announce="open"] .announce {
+  grid-template-rows: 1fr;
+}
+:root[data-announce="open"] .announce [role="region"] {
+  opacity: 1;
+  transform: none;
+}
+:root[data-announce="hidden"] .announce {
+  display: none;
+}
+:root[data-announce="open"] .announce-sheen {
+  animation: announce-sheen 1.6s cubic-bezier(0.4, 0, 0.2, 1) 0.5s 1 both;
+}
+@keyframes announce-sheen {
+  from {
+    transform: translateX(0) skewX(-12deg);
+  }
+  to {
+    transform: translateX(450%) skewX(-12deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .announce,
+  .announce [role="region"] {
+    transition: none;
+  }
+  .announce-sheen {
+    display: none;
+  }
 }

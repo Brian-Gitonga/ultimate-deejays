@@ -25,6 +25,7 @@ import { UpgradeDialog } from "../upgrade/upgrade-dialog";
 import { UserAvatar } from "../user-avatar";
 import { downloadBlock, limitedAllowance, useLimitBounce } from "./download-limit";
 import { DownloadStateIcon, useDownload } from "./download-progress";
+import { HoverVideo, PreviewBadge, useHoverPreview } from "./hover-preview";
 import { StoreCover } from "./store-cover";
 import { StoreFilterPanel } from "./store-filters";
 import { accessFor, useRefreshStoreViewer, useStoreViewer } from "./store-viewer";
@@ -481,14 +482,17 @@ function StoreTile({
   const meta = [resource.creator.name, free ? "" : planLabel(resource.access), formatBadge(resource)].filter(Boolean).join(" · ");
   const action = `absolute right-2.5 bottom-2.5 z-10 hidden size-9 items-center justify-center rounded-full text-white transition-[opacity,background-color] duration-200 hover:bg-brand can-hover:flex`;
   const download = useDownload(useRefreshStoreViewer());
+  // With a mouse, resting on the cover plays its preview clip.
+  const preview = useHoverPreview(resource.previewVideo);
 
   return (
-    <article className="group relative">
+    <article className="group relative" {...preview.handlers}>
       <div className={`relative aspect-video overflow-hidden rounded-md bg-muted ring-offset-2 ring-offset-background ${selected ? "ring-2 ring-brand" : ""}`}>
         <StoreCover resource={resource} priority={priority} sizes={sizes} titled={false} />
+        <HoverVideo {...preview.video} />
 
-        {(free || resource.featured) && (
-          <div className="absolute top-2 left-2 flex items-center gap-1">
+        {(free || resource.featured || resource.previewVideo) && (
+          <div className="absolute top-2 left-2 z-[3] flex items-center gap-1">
             {free && <span className="rounded bg-brand px-1.5 py-0.5 text-[0.6875rem] leading-4 font-semibold text-white">Free</span>}
             {resource.featured && (
               <span title="Featured" className="flex size-5 items-center justify-center rounded bg-accent-yellow text-neutral-900">
@@ -496,6 +500,7 @@ function StoreTile({
                 <span className="sr-only">Featured</span>
               </span>
             )}
+            {resource.previewVideo && <PreviewBadge status={preview.status} compact />}
           </div>
         )}
 

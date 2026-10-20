@@ -2,6 +2,7 @@ import type { Course, Instructor } from "@/lib/content";
 import type { CategorySlug, Level, SubcategorySlug } from "@/lib/course-taxonomy";
 import type { CurriculumSection } from "@/lib/curriculum";
 import type { Tables } from "@/lib/supabase/database.types";
+import { asContentPlan } from "@/lib/plan-tiers";
 
 /*
  * Database rows → the shapes the site's components render. Shared by the
@@ -45,7 +46,7 @@ export function toCourse(row: CourseRow): Course {
     level: row.level as Level,
     category: row.category as CategorySlug,
     subcategory: (row.subcategory || undefined) as SubcategorySlug | undefined,
-    access: row.access_plan,
+    access: asContentPlan(row.access_plan),
     instructor: toInstructor(row.instructor),
     students: figures.students,
     durationMinutes: row.duration_minutes,

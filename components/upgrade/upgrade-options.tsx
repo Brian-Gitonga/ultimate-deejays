@@ -1,11 +1,12 @@
 import Link from "next/link";
 import { allowanceSummary } from "@/lib/allowances";
 import { formatMoney } from "@/lib/money";
+import { priceSuffix } from "@/lib/plan-tiers";
 import type { UpgradePlan } from "@/lib/upgrade";
 import { ArrowRightIcon } from "../icons";
 
 /* The plans that would let the member do what they tried, each with its price and a way to get it. */
-export function UpgradeOptions({ options, currency, credit }: { options: UpgradePlan[]; currency: string; /** Taken off each price (see upgradeCredit) */ credit: number }) {
+export function UpgradeOptions({ options, currency, note }: { options: UpgradePlan[]; currency: string; /** e.g. what checkout takes off (see upgradeNote) */ note: string | null }) {
   if (!options.length) {
     return (
       <p className="rounded-xl bg-muted px-4 py-3 text-sm text-muted-foreground">
@@ -31,8 +32,8 @@ export function UpgradeOptions({ options, currency, credit }: { options: Upgrade
                 {p.allowance && <p className="mt-0.5 text-sm text-muted-foreground">{allowanceSummary(p.allowance)}</p>}
               </div>
               <p className="shrink-0 text-right">
-                <span className="block font-semibold text-foreground tabular-nums">{formatMoney(Math.max(0, p.price - credit), currency)}</span>
-                <span className="text-xs text-muted-foreground">{credit > 0 ? "to upgrade" : "one-time"}</span>
+                <span className="block font-semibold text-foreground tabular-nums">{formatMoney(p.price, currency)}</span>
+                <span className="text-xs text-muted-foreground">{priceSuffix(p.slug)}</span>
               </p>
             </div>
             <Link
@@ -47,7 +48,7 @@ export function UpgradeOptions({ options, currency, credit }: { options: Upgrade
           </li>
         ))}
       </ul>
-      {credit > 0 && <p className="mt-3 text-center text-xs text-muted-foreground">You only pay the difference from your current plan.</p>}
+      {note && <p className="mt-3 text-center text-xs text-muted-foreground">{note}</p>}
     </div>
   );
 }

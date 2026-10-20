@@ -5,7 +5,9 @@
  * (store_download(), request_edit()); this file is for showing them.
  */
 
-export type PlanSlug = "warm-up" | "resident" | "headliner";
+import type { PlanSlug } from "./plan-tiers";
+
+export type { PlanSlug };
 export type AllowancePeriod = "month" | "total";
 
 export type PlanAllowance = {

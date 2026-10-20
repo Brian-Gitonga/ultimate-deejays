@@ -1,5 +1,6 @@
 "use client";
 
+import type { PlanSlug } from "@/lib/plan-tiers";
 import { useId, useState } from "react";
 import { deleteMix, saveFeedback } from "@/app/(studio)/studio/feedback/actions";
 import { mixHost, type MixSubmission } from "@/lib/mixes";
@@ -85,7 +86,7 @@ export function FeedbackManager({ seed }: { seed: MixSubmission[] }) {
               </span>
             ),
           },
-          { key: "plan", header: "Plan", sort: (m) => m.plan, render: (m) => (m.plan ? <PlanBadge plan={m.plan as "warm-up" | "resident" | "headliner"} /> : <span className="text-muted-foreground">–</span>) },
+          { key: "plan", header: "Plan", sort: (m) => m.plan, render: (m) => (m.plan ? <PlanBadge plan={m.plan as PlanSlug} /> : <span className="text-muted-foreground">–</span>) },
           {
             key: "status",
             header: "Status",

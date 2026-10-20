@@ -6,6 +6,8 @@ import { requireViewer } from "@/lib/dal";
 import { allowanceHighlights } from "@/lib/allowances";
 import { getPlanAllowances } from "@/lib/db/allowances";
 import { getSiteSettings } from "@/lib/db/settings";
+import { isAbove } from "@/lib/plan-tiers";
+import { planStatus } from "@/lib/plan-status";
 import { paymentMethodLabel } from "@/lib/earnings";
 import { createClient } from "@/lib/supabase/server";
 
@@ -29,7 +31,9 @@ export default async function BillingPage() {
 
   const planName = (slug: string) => settings.plans.find((p) => p.slug === slug)?.name ?? slug;
   const current = settings.plans.find((p) => p.slug === viewer.plan);
-  const next = settings.plans.find((p) => p.slug === (viewer.plan === "warm-up" ? "resident" : viewer.plan === "resident" ? "headliner" : ""));
+  // The next plan up that's on sale (Lifetime once it has a price).
+  const next = settings.plans.find((p) => p.price > 0 && isAbove(p.slug, viewer.plan));
+  const status = planStatus(viewer, settings.plans, new Date().getTime());
   const rows = payments.data ?? [];
 
   return (
@@ -41,8 +45,19 @@ export default async function BillingPage() {
             <h1 id="plan-title" className="mt-1 text-2xl font-bold tracking-tight text-foreground">
               {viewer.role === "admin" ? "Admin: every course" : (current?.name ?? viewer.plan)}
             </h1>
-            <p className="mt-1 text-sm text-muted-foreground">{viewer.plan === "warm-up" ? "Free forever." : "Paid once, yours for life. Nothing renews."}</p>
+            <p className={`mt-1 text-sm ${status.ending ? "font-medium text-[#9a6400] dark:text-accent-amber" : "text-muted-foreground"}`}>{status.line}</p>
+            {status.after && (
+              <p className="mt-0.5 text-sm text-muted-foreground">
+                Nothing renews by itself: renew to add 30 days. If it ends, you go back to {status.after}.
+              </p>
+            )}
           </div>
+          <div className="flex flex-wrap gap-2">
+          {status.renew && (
+            <Link href={status.renew.href} className="inline-flex h-10 items-center gap-2 rounded-lg border border-border px-4 text-sm font-semibold text-foreground transition hover:bg-foreground/5">
+              {status.renew.label}
+            </Link>
+          )}
           {next && viewer.role !== "admin" && (
             <Link
               href={`/checkout?plan=${next.slug}`}
@@ -52,6 +67,7 @@ export default async function BillingPage() {
               Upgrade to {next.name}
             </Link>
           )}
+          </div>
         </div>
         {current && (
           <ul className="mt-5 grid gap-2 border-t border-border pt-5 text-sm sm:grid-cols-2">
@@ -97,7 +113,7 @@ export default async function BillingPage() {
                     <td className="px-6 py-3 whitespace-nowrap text-muted-foreground">{date.format(new Date(p.paid_at))}</td>
                     <td className="px-3 py-3 text-foreground">
                       {planName(p.plan)}
-                      {p.kind === "upgrade" && <span className="text-muted-foreground"> (upgrade)</span>}
+                      {p.kind !== "purchase" && <span className="text-muted-foreground"> ({p.kind})</span>}
                       {p.coupon_code && <span className="block text-xs text-muted-foreground">Code {p.coupon_code}: −{formatMoney(Number(p.discount), p.currency)}</span>}
                     </td>
                     <td className="px-3 py-3 text-muted-foreground">{p.source || paymentMethodLabel[p.method]}</td>

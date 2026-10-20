@@ -1,14 +1,15 @@
 "use client";
 
-import { useCallback, useId, useRef, useState } from "react";
-import { deleteStoreResource, discardStoreUploads, saveStoreResource, startR2Upload } from "@/app/(studio)/studio/store/actions";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { deleteStoreResource, discardStoreUploads, saveStoreResource, startR2Upload, studioPreviewVideoUrl } from "@/app/(studio)/studio/store/actions";
 import { youtubeId } from "@/lib/curriculum";
+import { optimizePreviewVideo, PREVIEW_ENCODING } from "@/lib/video-optimize";
 import { providerOf, storageProviders, type StorageProvider } from "@/lib/storage";
-import { formatDownloads, formatSize, planLabel, resourcePath, storagePathFor, storeCategories, categoryName, fileKind, type StudioStoreFile, type StudioStoreResource } from "@/lib/store";
+import { PREVIEW_VIDEO_GOOD_BYTES, PREVIEW_VIDEO_MAX_BYTES, PREVIEW_VIDEO_TYPES, formatDownloads, formatSize, planLabel, resourcePath, storagePathFor, storeCategories, categoryName, fileKind, type StudioStoreFile, type StudioStoreResource } from "@/lib/store";
 import { slugify, type InstructorOption } from "@/lib/studio-courses";
 import { reportStudioError, useServerCollection } from "@/lib/studio-store";
 import { createClient } from "@/lib/supabase/client";
-import { ArrowUpRightIcon, ChevronDownIcon, DownloadIcon, LinkIcon, PencilIcon, PlusIcon, TrashIcon, TrendUpIcon, UsersIcon } from "../icons";
+import { ArrowUpRightIcon, ChevronDownIcon, DownloadIcon, LinkIcon, PencilIcon, PlayIcon, PlusIcon, TrashIcon, TrendUpIcon, UsersIcon } from "../icons";
 import { fileIcons, StoreCover } from "../store/store-cover";
 import { EditFormBuilder } from "./edit-form-builder";
 import { ThumbnailPicker } from "./course-fields";
@@ -27,6 +28,8 @@ const blank = (): StudioStoreResource => ({
   category: "practice-tracks",
   thumbnail: "",
   previewUrl: "",
+  previewVideo: "",
+  heroFeatured: false,
   access: "warm-up",
   lowerThird: false,
   instructorId: null,
@@ -235,6 +238,163 @@ async function uploadToSupabase(resourceId: string, file: File): Promise<string 
   return null;
 }
 
+/*
+ * The clip that plays when someone rests the mouse on the cover, and at the
+ * top of the resource's page. Uploaded straight to storage like the files;
+ * watched here from the computer (just uploaded) or a signed link (saved).
+ */
+function PreviewVideoField({
+  resourceId,
+  value,
+  provider,
+  hasThumbnail,
+  onChange,
+  onUploadingChange,
+}: {
+  resourceId: string;
+  value: string;
+  provider: StorageProvider;
+  hasThumbnail: boolean;
+  onChange: (path: string) => void;
+  onUploadingChange: (uploading: boolean) => void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const hintId = useId();
+  // Just uploaded: played from the file itself. Saved: from a signed link.
+  const [local, setLocal] = useState<{ path: string; url: string; name: string; size: number; note: string } | null>(null);
+  const [remote, setRemote] = useState<{ path: string; url: string } | null>(null);
+  const [progress, setProgress] = useState<number | null>(null);
+  // Optimising (in this browser) comes before uploading.
+  const [sending, setSending] = useState<false | "optimizing" | "uploading">(false);
+  const [problem, setProblem] = useState("");
+  const src = local?.path === value ? local.url : remote?.path === value ? remote.url : "";
+
+  useEffect(() => {
+    if (!value || local?.path === value || remote?.path === value) return;
+    let cancelled = false;
+    studioPreviewVideoUrl(value).then(
+      (result) => !cancelled && (result.ok ? setRemote({ path: value, url: result.record }) : setProblem(result.error)),
+      () => !cancelled && setProblem("Couldn't load the preview video."),
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [value, local, remote]);
+
+  // The file's address in this tab is let go when it's replaced or the drawer closes.
+  useEffect(() => () => {
+    if (local) URL.revokeObjectURL(local.url);
+  }, [local]);
+
+  async function pick(file: File | undefined) {
+    if (inputRef.current) inputRef.current.value = "";
+    if (!file) return;
+    setProblem("");
+    if (!file.type.startsWith("video/")) return setProblem("That isn't a video. Export an MP4, MOV or WebM clip.");
+    if (file.size > 2 * 1024 ** 3) return setProblem(`That clip is ${formatSize(file.size)}. Export a shorter clip (under 2 GB).`);
+    onUploadingChange(true);
+
+    // 1. Shrink it here, so every visitor downloads a small, quick-starting file.
+    setSending("optimizing");
+    setProgress(0);
+    const result = await optimizePreviewVideo(file, setProgress).catch((error: unknown) => {
+      console.error("[preview video] optimising", error);
+      return null;
+    });
+    const ready = result?.file ?? file;
+    const fail = (message: string) => {
+      onUploadingChange(false);
+      setSending(false);
+      setProgress(null);
+      setProblem(message);
+    };
+    if (!result?.optimized && !PREVIEW_VIDEO_TYPES.includes(ready.type)) return fail("This browser can't convert that video. Export it as an MP4 (H.264), or use Chrome or Edge, which convert it for you.");
+    if (ready.size > PREVIEW_VIDEO_MAX_BYTES) return fail(`That clip is ${formatSize(ready.size)}. Preview videos can be up to ${formatSize(PREVIEW_VIDEO_MAX_BYTES)}: export a shorter clip.`);
+
+    // 2. Upload the light version.
+    setSending("uploading");
+    setProgress(provider === "r2" ? 0 : null);
+    const path = provider === "r2" ? await uploadToR2(resourceId, ready, setProgress) : await uploadToSupabase(resourceId, ready);
+    onUploadingChange(false);
+    setSending(false);
+    setProgress(null);
+    if (!path) return;
+    const note = result?.optimized
+      ? `Optimised for fast playback: ${formatSize(result.before)} → ${formatSize(result.after)}${result.trimmed ? `, first ${PREVIEW_ENCODING.maxSeconds} seconds` : ""}.`
+      : "Uploaded as it is: this browser can't optimise video (Chrome or Edge can).";
+    setLocal({ path, url: URL.createObjectURL(ready), name: ready.name, size: ready.size, note });
+    onChange(path);
+  }
+
+  const large = local?.path === value && local.size > PREVIEW_VIDEO_GOOD_BYTES;
+
+  return (
+    <div>
+      <p className="mb-2 text-sm font-medium text-foreground">Preview video</p>
+      <input ref={inputRef} id="store-preview-video" type="file" accept="video/*" className="sr-only" aria-describedby={hintId} onChange={(e) => pick(e.target.files?.[0])} />
+      {value && !sending ? (
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
+          <div className="relative aspect-video w-full max-w-xs shrink-0 overflow-hidden rounded-xl bg-neutral-900">
+            {src ? (
+              <video key={src} src={src} muted loop autoPlay playsInline preload="metadata" className="size-full object-cover" aria-label="Preview video" />
+            ) : (
+              <span className="absolute inset-0 flex items-center justify-center text-xs text-white/60">{problem || "Loading…"}</span>
+            )}
+          </div>
+          <div className="min-w-0 text-sm">
+            <p className="truncate font-medium text-foreground">{local?.path === value ? local.name : "Preview video"}</p>
+            <p className="text-xs text-muted-foreground">
+              {local?.path === value ? `${formatSize(local.size)} · ` : ""}
+              {storageProviders[providerOf(value)].name}
+            </p>
+            {local?.path === value && <p className="mt-1 text-xs text-brand-deep dark:text-brand">{local.note}</p>}
+            <div className="mt-2 flex gap-2">
+              <label htmlFor="store-preview-video" className={`${secondaryButton} cursor-pointer`}>
+                Replace
+              </label>
+              <button type="button" onClick={() => onChange("")} className={`${secondaryButton} text-red-600 hover:bg-red-500/10 dark:text-red-400`}>
+                Remove
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : sending ? (
+        <div className="max-w-xs rounded-xl border border-border p-4" aria-live="polite">
+          <p className="flex items-center justify-between text-sm text-foreground">
+            {sending === "optimizing" ? "Optimising for fast playback…" : "Uploading the clip…"}
+            {progress !== null && <span className="tabular-nums text-muted-foreground">{Math.round(progress * 100)}%</span>}
+          </p>
+          <p className="mt-0.5 text-xs text-muted-foreground">{sending === "optimizing" ? "Step 1 of 2 · keep this tab open" : "Step 2 of 2"}</p>
+          {progress !== null && (
+            <span role="progressbar" aria-label={sending === "optimizing" ? "Optimising the preview video" : "Uploading the preview video"} aria-valuenow={Math.round(progress * 100)} aria-valuemin={0} aria-valuemax={100} className="mt-2 block h-1.5 overflow-hidden rounded-full bg-foreground/[0.07]">
+              <span className="block h-full rounded-full bg-brand transition-[width]" style={{ width: `${progress * 100}%` }} />
+            </span>
+          )}
+        </div>
+      ) : (
+        <label
+          htmlFor="store-preview-video"
+          className="flex max-w-md cursor-pointer items-center gap-3 rounded-xl border border-dashed border-border px-4 py-4 text-sm transition hover:bg-foreground/[0.03]"
+        >
+          <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-brand/10 text-brand">
+            <PlayIcon className="size-4" />
+          </span>
+          <span>
+            <span className="block font-medium text-foreground">Upload a preview clip</span>
+            <span className="text-xs text-muted-foreground">MP4, MOV or WebM · we optimise it for you</span>
+          </span>
+        </label>
+      )}
+      {problem && !value && <p className="mt-2 text-sm text-red-600 dark:text-red-400">{problem}</p>}
+      {large && <p className="mt-2 text-sm text-[#9a6400] dark:text-accent-amber">This clip is {formatSize(local!.size)}, so it may start late on hover. A shorter clip loads faster.</p>}
+      {value && !hasThumbnail && <p className="mt-2 text-sm text-[#9a6400] dark:text-accent-amber">Add a thumbnail above too: it shows while the clip loads, and on phones.</p>}
+      <p id={hintId} className="mt-2 text-xs text-muted-foreground">
+        Optional. Plays (muted) when someone rests the mouse on the cover, and at the top of its page. 5–15 seconds is ideal. Before uploading, it&apos;s resized to 540p, the sound is removed and it&apos;s cut to {PREVIEW_ENCODING.maxSeconds} seconds, so it starts fast even on slow connections. Saved to the storage chosen under Files.
+      </p>
+    </div>
+  );
+}
+
 function ResourceDrawer({
   resource,
   instructors,
@@ -256,6 +416,7 @@ function ResourceDrawer({
   const [slugTouched, setSlugTouched] = useState(!isNew);
   const [busy, setBusy] = useState(false);
   const [uploading, setUploading] = useState<Upload[]>([]);
+  const [videoUploading, setVideoUploading] = useState(false);
   // Where new uploads go: the last choice on this computer, else the first available.
   const [provider, setProvider] = useState<StorageProvider>(() => {
     let saved: string | null = null;
@@ -329,7 +490,8 @@ function ResourceDrawer({
     if (slugTaken) return setError("Another resource already uses that URL.");
     if (previewBad) return setError("The preview must be a YouTube link.");
     if (status === "published" && !draft.files.length) return setError("Add at least one file before publishing.");
-    if (uploading.length) return setError("Wait for the uploads to finish.");
+    if (uploading.length || videoUploading) return setError("Wait for the uploads to finish.");
+    if (draft.previewVideo && !draft.thumbnail) return setError("Add a thumbnail too: it shows while the preview video loads, and on phones.");
     setError("");
     setBusy(true);
     const ok = await onSave({ ...draft, status });
@@ -533,7 +695,21 @@ function ResourceDrawer({
       <Field label="Thumbnail" htmlFor="store-thumb" hint="16:9 works best, like a video thumbnail. Without one, the store draws a cover from the category.">
         <ThumbnailPicker id="store-thumb" folder="store" size={{ width: 1280, height: 720 }} value={draft.thumbnail} onChange={(src) => set("thumbnail", src)} />
       </Field>
-      <Field label="Preview video" htmlFor="store-preview" error={previewBad ? "Paste a YouTube link." : undefined} hint="Optional YouTube link shown on the resource page instead of the thumbnail.">
+      <PreviewVideoField
+        resourceId={draft.id}
+        value={draft.previewVideo}
+        provider={provider}
+        hasThumbnail={!!draft.thumbnail}
+        onUploadingChange={setVideoUploading}
+        onChange={(path) => {
+          // A clip uploaded in this drawer and replaced before saving is deleted now; a saved one goes when you save.
+          const previous = draft.previewVideo;
+          if (previous && fresh.current.has(previous)) discardFresh([previous]);
+          if (path) fresh.current.add(path);
+          set("previewVideo", path);
+        }}
+      />
+      <Field label="YouTube video" htmlFor="store-preview" error={previewBad ? "Paste a YouTube link." : undefined} hint="Optional. Shown on the resource page when there's no preview video above.">
         <Input id="store-preview" value={draft.previewUrl} placeholder="https://youtu.be/…" onChange={(e) => set("previewUrl", e.target.value.trim())} />
       </Field>
       <Field label="Description" htmlFor="store-description" hint="What's inside and how to use it.">
@@ -546,6 +722,19 @@ function ResourceDrawer({
         checked={draft.lowerThird}
         onChange={(on) => set("lowerThird", on)}
       />
+      {draft.lowerThird && (
+        <Switch
+          id="store-hero"
+          label="Show in the Lower thirds hero"
+          hint={
+            draft.previewVideo
+              ? "Plays in the carousel at the top of /lower-thirds, on its own (no hover needed)."
+              : "Plays in the carousel at the top of /lower-thirds. Add a preview video above: without one it shows its thumbnail."
+          }
+          checked={draft.heroFeatured}
+          onChange={(on) => set("heroFeatured", on)}
+        />
+      )}
       <EditFormBuilder value={draft} onChange={(patch) => setDraft((d) => ({ ...d, ...patch }))} />
       <Switch id="store-featured" label="Featured" hint="Pinned to the front of the store with a Featured badge." checked={draft.featured} onChange={(on) => set("featured", on)} />
     </Drawer>

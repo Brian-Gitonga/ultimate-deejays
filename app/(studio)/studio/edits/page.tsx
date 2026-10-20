@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import { EditRequestManager } from "@/components/studio/edit-request-manager";
 import { Panel, StudioPageHeader } from "@/components/studio/ui";
 import { getStudioEditRequests } from "@/lib/db/studio/edits";
-import { isSmsConfigured } from "@/lib/sms";
 import { createClient } from "@/lib/supabase/server";
 
 export const metadata: Metadata = { title: "Edit requests" };
@@ -23,7 +22,7 @@ export default async function StudioEditsPage({ searchParams }: PageProps<"/stud
             </p>
           </Panel>
         ) : (
-          <EditRequestManager seed={requests} smsReady={isSmsConfigured()} initialId={initialId} />
+          <EditRequestManager seed={requests} initialId={initialId} />
         )}
       </div>
     </main>

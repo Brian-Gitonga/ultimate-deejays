@@ -7,7 +7,8 @@ import { getSiteSettings } from "./settings";
 export async function getUpgradeContext(): Promise<UpgradeContext> {
   const [settings, allowances] = await Promise.all([getSiteSettings(), getPlanAllowances()]);
   return {
-    plans: settings.plans.map((p) => ({ slug: p.slug, name: p.name, price: p.price, featured: p.featured, allowance: allowances.find((a) => a.plan === p.slug) ?? null })),
+    // A paid plan priced 0 isn't for sale (Lifetime until its price is set).
+    plans: settings.plans.filter((p) => p.slug === "warm-up" || p.price > 0).map((p) => ({ slug: p.slug, name: p.name, price: p.price, featured: p.featured, allowance: allowances.find((a) => a.plan === p.slug) ?? null })),
     currency: settings.general.currency,
     upgradeCredit: settings.pricing.upgradeCredit,
   };

@@ -17,14 +17,17 @@ const schema = z.object({
   plans: z
     .array(
       z.object({
-        slug: z.enum(["warm-up", "resident", "headliner"]),
+        slug: z.enum(["warm-up", "resident", "headliner", "lifetime"]),
         name: z.string().trim().min(1, "Give every plan a name.").max(40),
         price: z.number().min(0, "Prices can't be negative.").max(100000),
         cta: z.string().trim().min(1, "Add the button text for every plan.").max(40),
         highlights: z.array(z.string().max(120)).max(20),
       }).passthrough(),
     )
-    .length(3),
+    // Warm-Up, Resident, Headliner and Lifetime (migration 020), each once.
+    .min(3)
+    .max(4)
+    .refine((plans) => new Set(plans.map((p) => p.slug)).size === plans.length, "Each plan can only appear once."),
   pricing: z.object({ heading: z.string().trim().min(1, "Add a pricing headline.").max(120), guaranteeDays: z.number().int().min(0).max(365) }).passthrough(),
   blog: z.object({ postsPerPage: z.number().int().min(3).max(60), homeLatest: z.number().int().min(0).max(12) }).passthrough(),
   payments: z.object({ minimum: z.number().min(0), refundWindow: z.number().int().min(0).max(365) }).passthrough(),
@@ -38,6 +41,20 @@ const schema = z.object({
     })
     .passthrough(),
   notifications: z.object({ email }).passthrough(),
+  announcement: z
+    .object({
+      enabled: z.boolean(),
+      message: z.string().trim().max(140, "Keep the announcement to 140 characters."),
+      highlight: z.string().trim().max(40, "Keep the highlight to 40 characters."),
+      ctaLabel: z.string().trim().max(30, "Keep the button text to 30 characters."),
+      ctaKind: z.enum(["whatsapp", "link"]),
+      ctaLink: z.string().trim().max(500),
+      whatsappText: z.string().trim().max(300),
+      endsAt: z.string().refine((v) => !v || !Number.isNaN(Date.parse(v)), "Pick a valid end date."),
+      style: z.enum(["brand", "night", "gold"]),
+    })
+    .refine((a) => !a.enabled || a.message.length > 0, "Write the announcement, or switch the bar off.")
+    .refine((a) => !a.enabled || a.ctaKind !== "link" || !a.ctaLabel || /^(\/(?!\/)|https?:\/\/)\S+$/.test(a.ctaLink), "The button link must start with / or https://."),
 });
 
 /** Saves Studio → Settings. The pricing page, blog and affiliate program pick it up straight away. */
@@ -63,14 +80,17 @@ export async function saveSettings(settings: SiteSettings): Promise<ActionResult
 const allowanceSchema = z
   .array(
     z.object({
-      plan: z.enum(["warm-up", "resident", "headliner"]),
+      plan: z.enum(["warm-up", "resident", "headliner", "lifetime"]),
       downloads: z.number().int().min(0, "Downloads can't be negative.").max(100_000).nullable(),
       edits: z.number().int().min(0, "Edit requests can't be negative.").max(10_000).nullable(),
       openEdits: z.number().int().min(1, "Allow at least 1 request waiting at once, or leave it empty.").max(100).nullable(),
       period: z.enum(["month", "total"]),
     }),
   )
-  .length(3);
+  // One row per plan: three before migration 021, four with Lifetime.
+  .min(3)
+  .max(4)
+  .refine((rows) => new Set(rows.map((r) => r.plan)).size === rows.length, "Each plan can only appear once.");
 
 /** Saves each plan's download and edit allowance (Studio → Settings → Pricing page). The database enforces them straight away. */
 export async function savePlanAllowances(allowances: PlanAllowance[]): Promise<ActionResult<PlanAllowance[]>> {
@@ -83,7 +103,7 @@ export async function savePlanAllowances(allowances: PlanAllowance[]): Promise<A
         must(await supabase.from("plan_allowances").update({ downloads: a.downloads, edits: a.edits, open_edits: a.openEdits, period: a.period }).eq("plan", a.plan).select("plan"));
       }
       const rows = must(await supabase.from("plan_allowances").select("plan, downloads, edits, open_edits, period"));
-      const order = ["warm-up", "resident", "headliner"];
+      const order = ["warm-up", "resident", "headliner", "lifetime"];
       return rows.map(toAllowance).sort((a, b) => order.indexOf(a.plan) - order.indexOf(b.plan));
     },
     { tags: [CONTENT_TAGS.settings] },

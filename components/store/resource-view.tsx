@@ -7,6 +7,7 @@ import type { EditSetup } from "@/lib/db/edits";
 import type { UpgradeContext } from "@/lib/upgrade";
 import { DownloadButton, FileList, RequestEditButton } from "./download-panel";
 import { CreatorAvatar } from "./store-browser";
+import { FeaturedVideo } from "./featured-video";
 import { StoreCover } from "./store-cover";
 import { StoreViewerProvider } from "./store-viewer";
 
@@ -75,8 +76,14 @@ export function StoreResourceView({
           <div className="grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1fr)_22rem] xl:gap-10">
             <div className="min-w-0">
               <div className="relative aspect-video overflow-hidden rounded-2xl bg-muted">
-                {videoId ? <YouTubePlayer label="Watch the preview" videoId={videoId} title={resource.title} /> : <StoreCover resource={resource} priority sizes="(min-width: 1024px) 60vw, 100vw" />}
-                {!videoId && <span className="absolute right-3 bottom-3 rounded-md bg-black/75 px-2 py-1 text-xs font-medium text-white">{formatBadge(resource)}</span>}
+                {resource.previewVideo ? (
+                  <FeaturedVideo src={resource.previewVideo} poster={resource.thumbnail} title={resource.title} />
+                ) : videoId ? (
+                  <YouTubePlayer label="Watch the preview" videoId={videoId} title={resource.title} />
+                ) : (
+                  <StoreCover resource={resource} priority sizes="(min-width: 1024px) 60vw, 100vw" />
+                )}
+                {!videoId && !resource.previewVideo && <span className="absolute right-3 bottom-3 rounded-md bg-black/75 px-2 py-1 text-xs font-medium text-white">{formatBadge(resource)}</span>}
               </div>
 
               <h1 className="mt-5 text-2xl leading-tight font-bold tracking-tight text-balance text-foreground sm:text-[1.75rem]">{resource.title}</h1>

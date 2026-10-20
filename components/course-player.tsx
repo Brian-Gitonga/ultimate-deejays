@@ -25,8 +25,6 @@ import {
   StarIcon,
   UsersIcon,
 } from "./icons";
-import { Logo } from "./logo";
-import { ThemeToggle } from "./theme-toggle";
 import { YouTubePlayer } from "./youtube-player";
 
 export type PlayerCourse = {
@@ -175,11 +173,9 @@ export function CoursePlayer({
 
   return (
     <div className="flex min-h-dvh flex-col">
-      {/* Top bar */}
-      <header className="sticky top-0 z-40 flex h-16 items-center gap-4 border-b border-border bg-background/90 px-4 backdrop-blur-xl sm:px-6">
-        <Logo size="xs" />
-        <span aria-hidden="true" className="hidden h-6 w-px bg-border md:block" />
-        <p className="hidden min-w-0 flex-1 truncate text-[0.9375rem] font-semibold text-foreground md:block">{course.title}</p>
+      {/* Course bar: pinned once the site header has scrolled away */}
+      <div className="sticky top-0 z-40 flex h-16 items-center gap-4 border-y border-border bg-background/90 px-4 backdrop-blur-xl sm:px-6">
+        <p className="min-w-0 flex-1 truncate text-[0.9375rem] font-semibold text-foreground">{course.title}</p>
         <div className="ml-auto flex items-center gap-1.5 sm:gap-3">
           {canTrack && <ProgressRing percent={percent} />}
           <button
@@ -192,7 +188,6 @@ export function CoursePlayer({
             <ListIcon className="size-4" />
             {sidebarOpen ? "Hide content" : "Course content"}
           </button>
-          <ThemeToggle />
           <Link
             href="/courses"
             aria-label="Exit course"
@@ -202,7 +197,7 @@ export function CoursePlayer({
             <span className="hidden sm:inline">Exit</span>
           </Link>
         </div>
-      </header>
+      </div>
 
       <div
         className={`grid flex-1 grid-cols-1 [grid-template-areas:'player''aside''details'] ${
@@ -559,7 +554,7 @@ function LessonGate({
         </span>
         <h2 className="mt-4 text-xl font-bold sm:text-2xl">Unlock this lesson with {course.accessName}</h2>
         <p className="mt-2 text-sm text-white/75 sm:text-[0.9375rem]">
-          {course.title} is included in the {course.accessName} plan and up. Pay once, keep it for life, and track your progress.
+          {course.title} is included in the {course.accessName} plan and up: monthly with M-Pesa or card, or every course for good with Lifetime.
         </p>
         <div className="mt-6 flex flex-col justify-center gap-2 sm:flex-row">
           <Link href={`/checkout?plan=${gate.plan}`} className={`${button} bg-brand text-white hover:brightness-110`}>

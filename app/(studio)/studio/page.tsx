@@ -15,12 +15,15 @@ import {
   WalletIcon,
 } from "@/components/icons";
 import { RevenueChart } from "@/components/revenue-chart";
+import { StorageCard } from "@/components/studio/storage-card";
 import { StatusBadge, statusMeta } from "@/components/studio/status";
 import { PlanBadge } from "@/components/studio/student-manager";
 import { UserAvatar } from "@/components/user-avatar";
 import { displayName, requireAdmin } from "@/lib/dal";
 import { getDashboard, type Dashboard } from "@/lib/db/studio/dashboard";
 import { getSiteSettings } from "@/lib/db/settings";
+import { getStorageOverview } from "@/lib/db/studio/storage";
+import { createClient } from "@/lib/supabase/server";
 import { moneyFormatter } from "@/lib/money";
 
 // The layout title template does not apply to a page in the same segment, so the full title is spelled out.
@@ -38,7 +41,9 @@ const todoIcons: Record<Dashboard["todos"][number]["key"], ComponentType<SVGProp
 const sourceLabel: Record<string, string> = { self: "Started", admin: "Added by admin", purchase: "Purchase" };
 
 export default async function StudioDashboardPage() {
-  const [admin, d, settings] = await Promise.all([requireAdmin(), getDashboard(), getSiteSettings()]);
+  // Admin first: the storage check reads the R2 bucket.
+  const admin = await requireAdmin();
+  const [d, settings, storage] = await Promise.all([getDashboard(), getSiteSettings(), createClient().then(getStorageOverview)]);
   const currency = settings.general.currency;
   const money = moneyFormatter(currency, 0);
   const firstName = displayName(admin).split(" ")[0];
@@ -310,6 +315,8 @@ export default async function StudioDashboardPage() {
             <p className="px-6 pb-6 text-sm text-muted-foreground">No payouts yet.</p>
           )}
         </Card>
+
+        <StorageCard storage={storage} />
       </div>
     </main>
   );

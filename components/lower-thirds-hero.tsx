@@ -1,6 +1,19 @@
 import Link from "next/link";
+import type { StoreResource } from "@/lib/store";
 import { ArrowRightIcon, ChevronRightIcon, HomeIcon } from "./icons";
-import { LowerThirdPreview } from "./lower-third-preview";
+import { LowerThirdsShowcase } from "./lower-thirds-showcase";
+
+/**
+ * What the hero shows: the lower thirds picked in Studio → Store ("Show in the
+ * Lower thirds hero"); until some are picked, the newest with a preview
+ * video; failing that, the newest. Up to six.
+ */
+export function pickShowcase(lowerThirds: StoreResource[]) {
+  const newest = [...lowerThirds].sort((a, b) => b.publishedAt.localeCompare(a.publishedAt));
+  const picked = newest.filter((r) => r.heroFeatured);
+  const withVideo = newest.filter((r) => r.previewVideo);
+  return (picked.length ? picked : withVideo.length ? withVideo : newest).slice(0, 6);
+}
 
 /** "12 designs. 5 are free with an account; members get the rest." */
 function summary(count: number, free: number) {
@@ -12,14 +25,14 @@ function summary(count: number, free: number) {
 }
 
 /*
- * The /lower-thirds hero: what a lower third is and what it's for, beside an
- * example frame that shows one on screen. Laid out like the home hero (text
+ * The /lower-thirds hero: what a lower third is and what it's for, beside the
+ * featured lower thirds playing one after another (LowerThirdsShowcase). Laid out like the home hero (text
  * in five columns, the picture in seven) and sized to its content, so the
  * library starts just below it. The page is full width on big screens (like
  * the store), so the headline grows a step and the frame stops at 60rem
  * (72rem on ultra-wide screens).
  */
-export function LowerThirdsHero({ count, free }: { count: number; free: number }) {
+export function LowerThirdsHero({ count, free, showcase }: { count: number; free: number; showcase: StoreResource[] }) {
   return (
     <section aria-labelledby="lower-thirds-title" className="site-container pt-6 pb-14 sm:pt-10 lg:pb-20">
       <nav aria-label="Breadcrumb" className="mb-8 lg:mb-12">
@@ -38,7 +51,8 @@ export function LowerThirdsHero({ count, free }: { count: number; free: number }
       </nav>
 
       <div className="grid items-center gap-x-12 gap-y-10 lg:grid-cols-12">
-        <div className="lg:col-span-5">
+        {/* Text alone (full width) until there are lower thirds to show beside it. */}
+        <div className={showcase.length ? "lg:col-span-5" : "lg:col-span-12"}>
           <h1
             id="lower-thirds-title"
             className="max-w-[30rem] text-[2.125rem] leading-[1.15] font-bold tracking-tight text-balance text-foreground sm:text-[2.75rem] xl:text-[3rem] min-[120rem]:max-w-[36rem] min-[120rem]:text-[3.5rem] min-[140rem]:max-w-[40rem] min-[140rem]:text-[4rem]"
@@ -67,9 +81,11 @@ export function LowerThirdsHero({ count, free }: { count: number; free: number }
         </div>
 
         {/* On very large screens the page is full width, so the frame stops growing and keeps the library in view. */}
-        <div className="w-full lg:col-span-7 lg:max-w-[60rem] lg:justify-self-end min-[140rem]:max-w-[72rem]">
-          <LowerThirdPreview />
-        </div>
+        {showcase.length > 0 && (
+          <div className="w-full lg:col-span-7 lg:max-w-[60rem] lg:justify-self-end min-[140rem]:max-w-[72rem]">
+            <LowerThirdsShowcase items={showcase} />
+          </div>
+        )}
       </div>
     </section>
   );

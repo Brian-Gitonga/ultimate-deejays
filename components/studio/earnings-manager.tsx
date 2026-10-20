@@ -146,7 +146,7 @@ export function EarningsManager({ seed, payoutSeed, today, openPayout = false }:
     <>
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-sm text-muted-foreground">
-          One-time plan payments from students. Figures below cover <span className="font-medium text-foreground">{periodLabel}</span>.
+          Plan payments from students: monthly plans, renewals and Lifetime. Figures below cover <span className="font-medium text-foreground">{periodLabel}</span>.
         </p>
         <div className="flex gap-2">
           <div className="w-44">
@@ -326,7 +326,7 @@ export function EarningsManager({ seed, payoutSeed, today, openPayout = false }:
             render: (t) => (
               <span className="flex items-center gap-2">
                 <PlanBadge plan={t.plan} />
-                {t.kind === "upgrade" && <span className="text-xs text-muted-foreground">Upgrade</span>}
+                {t.kind !== "purchase" && <span className="text-xs text-muted-foreground capitalize">{t.kind}</span>}
               </span>
             ),
           },
@@ -504,7 +504,7 @@ function PaymentDrawer({ t, onClose, onRefund, onCopy }: { t: Transaction; onClo
           Breakdown
         </h3>
         <dl className="mt-3 space-y-2 text-sm">
-          <Row label={`${planName(t.plan)} plan${t.kind === "upgrade" ? " (upgrade)" : ""}`} value={money(t.amount + t.discount)} />
+          <Row label={`${planName(t.plan)} plan${t.kind !== "purchase" ? ` (${t.kind})` : ""}`} value={money(t.amount + t.discount)} />
           {t.discount > 0 && <Row label={`Discount${t.couponCode ? ` · ${t.couponCode}` : ""}`} value={`−${money(t.discount)}`} />}
           {t.discount > 0 && <Row label="Customer paid" value={money(t.amount)} />}
           <Row label="Processing fee" value={t.fee ? `−${money(t.fee)}` : money(0)} />
@@ -533,7 +533,7 @@ function PaymentDrawer({ t, onClose, onRefund, onCopy }: { t: Transaction; onClo
               </span>
             }
           />
-          <Row label="Access" value="Lifetime (one-time payment)" />
+          <Row label="Access" value={t.billing === "monthly" ? "30 days (monthly plan)" : "For good (one-time payment)"} />
         </dl>
       </section>
 

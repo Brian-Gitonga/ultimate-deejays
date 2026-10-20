@@ -7,7 +7,7 @@ import { getStudioPosts } from "@/lib/db/studio/posts";
 
 export const metadata: Metadata = { title: "Settings" };
 
-const sectionKeys: SectionKey[] = ["general", "pricing", "blog", "payments", "affiliates", "notifications"];
+const sectionKeys: SectionKey[] = ["general", "pricing", "blog", "payments", "affiliates", "notifications", "announcement"];
 
 export default async function StudioSettingsPage({ searchParams }: PageProps<"/studio/settings">) {
   const [{ section }, settings, allPosts, allowances] = await Promise.all([searchParams, getSiteSettings(), getStudioPosts(), getPlanAllowances()]);

@@ -264,7 +264,7 @@ function ProfileEditor({
         </div>
       </AccountCard>
 
-      <AccountCard title="Phone" description="We text you when an edit you asked for is ready. Optional.">
+      <AccountCard title="Phone" description="We message you here (WhatsApp or SMS) when an edit you asked for is ready.">
         <div className="grid gap-5 sm:grid-cols-2">
           <TextField
             name="phone"

@@ -6,6 +6,7 @@ import { getStoreResource, getStoreResources } from "@/lib/db/store";
 import { getUpgradeContext } from "@/lib/db/upgrade";
 import { siteName } from "@/lib/site";
 import { resourcePath } from "@/lib/store";
+import { MediaPreconnect } from "@/components/store/media-preconnect";
 
 // Published resources are built ahead of time; new ones render on first visit.
 // Lower thirds have their page under /lower-thirds instead.
@@ -37,5 +38,10 @@ export default async function StoreResourcePage({ params }: PageProps<"/store/[s
   const [resource, all, edits, upgrade] = await Promise.all([getStoreResource(slug), getStoreResources(), getEditSetup(slug), getUpgradeContext()]);
   if (!resource) notFound();
   if (resource.lowerThird) redirect(resourcePath(resource.slug, true));
-  return <StoreResourceView resource={resource} all={all} now={new Date().getTime()} edits={edits} upgrade={upgrade} />;
+  return (
+    <>
+      <MediaPreconnect when={!!resource.previewVideo} />
+      <StoreResourceView resource={resource} all={all} now={new Date().getTime()} edits={edits} upgrade={upgrade} />
+    </>
+  );
 }

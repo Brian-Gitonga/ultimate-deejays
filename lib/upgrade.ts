@@ -1,4 +1,5 @@
 import type { AllowancePeriod, PlanAllowance, PlanSlug } from "./allowances";
+import { PLAN_RANK } from "./plan-tiers";
 
 /*
  * The upgrade prompt: when a member taps Download or Request an edit and
@@ -25,10 +26,11 @@ export type UpgradeReason =
   /** The template belongs to a higher plan */
   | { kind: "template-plan"; plan: PlanSlug };
 
-const RANK: Record<PlanSlug, number> = { "warm-up": 0, resident: 1, headliner: 2 };
+const RANK = PLAN_RANK;
 
-/** Taken off an upgrade's price: what their current plan cost, when upgrade credit is on (as at checkout). */
-export const upgradeCredit = (context: UpgradeContext, current: PlanSlug) => (context.upgradeCredit ? (context.plans.find((p) => p.slug === current)?.price ?? 0) : 0);
+/** Under upgrade prices, when Settings → Pricing → upgrade credit is on: checkout takes the exact amount off. */
+export const upgradeNote = (context: UpgradeContext, current: PlanSlug) =>
+  context.upgradeCredit && current !== "warm-up" ? "Checkout takes off the days you haven't used, and for Lifetime what you've paid once before." : null;
 
 /** Every plan above theirs, cheapest first. */
 export const plansAbove = (plans: UpgradePlan[], current: PlanSlug) => plans.filter((p) => RANK[p.slug] > RANK[current]).sort((a, b) => RANK[a.slug] - RANK[b.slug]);

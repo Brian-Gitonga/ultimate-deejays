@@ -99,7 +99,7 @@ export const swipeCopy: SwipeCopy[] = [
     id: "c-ig",
     channel: "Instagram / TikTok caption",
     title: "Short and punchy",
-    text: "Learned to beatmatch in a week with @ultimatedeejays 🎧 Start free, pay once if you want the full library, no subscription. Link in bio or use code {code}.",
+    text: "Learned to beatmatch in a week with @ultimatedeejays 🎧 Start free, go monthly with M-Pesa or grab Lifetime for the full library. Link in bio or use code {code}.",
   },
   {
     id: "c-yt",

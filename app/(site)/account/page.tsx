@@ -7,6 +7,7 @@ import { getMyEditRequests } from "@/lib/db/edits";
 import { getLearningSummary } from "@/lib/db/learning";
 import { getMyDownloads } from "@/lib/db/store";
 import { getUpgradeContext } from "@/lib/db/upgrade";
+import { planStatus } from "@/lib/plan-status";
 
 export const metadata: Metadata = { title: "Overview" };
 
@@ -34,7 +35,7 @@ export default async function AccountOverviewPage() {
         <p className="mt-1 text-muted-foreground">Welcome back, {displayName(viewer)}. Here&apos;s your plan and what you have left on it.</p>
       </div>
 
-      <PlanCard plan={viewer.plan} isAdmin={isAdmin} upgrade={upgrade} />
+      <PlanCard plan={viewer.plan} isAdmin={isAdmin} upgrade={upgrade} status={planStatus(viewer, upgrade.plans, now)} />
       {allowance && <AllowanceMeters allowance={allowance} upgrade={upgrade} current={viewer.plan} />}
       {!isAdmin && <UpgradeSection current={viewer.plan} upgrade={upgrade} />}
       <ContinueLearning learning={learning} now={now} />

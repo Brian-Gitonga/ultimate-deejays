@@ -28,7 +28,6 @@ type Value = { value: string; name?: string; size?: number };
 export function useEditRequest({ slug, form, userId, savedPhone }: { slug: string; form: EditField[]; userId: string; savedPhone: string }) {
   const [values, setValues] = useState<Record<string, Value>>({});
   const [phone, setPhoneValue] = useState(savedPhone);
-  const [textMe, setTextMe] = useState(true);
   const [notes, setNotesValue] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState("");
@@ -81,7 +80,7 @@ export function useEditRequest({ slug, form, userId, savedPhone }: { slug: strin
     if (!checked.ok) Object.assign(found, checked.errors);
     const normalized = normalizePhone(phone);
     if (normalized === null) found.phone = "Enter your number like 0712 345 678, or with its country code (+44…).";
-    else if (textMe && !normalized) found.phone = "Add your number so we can text you, or untick the box below.";
+    else if (!normalized) found.phone = "Add your number so we can let you know when it's ready.";
     if (notes.trim().length > 2000) found.notes = "Keep your notes under 2,000 characters.";
     if (Object.keys(found).length) {
       fail(found);
@@ -90,7 +89,7 @@ export function useEditRequest({ slug, form, userId, savedPhone }: { slug: strin
 
     setBusy(true);
     setFormError("");
-    const result = await requestEdit({ slug, values, notes, phone, textMe }).catch(() => ({
+    const result = await requestEdit({ slug, values, notes, phone }).catch(() => ({
       ok: false as const,
       error: "We couldn't reach the server. Check your connection and try again.",
     }));
@@ -106,7 +105,7 @@ export function useEditRequest({ slug, form, userId, savedPhone }: { slug: strin
     if (uploads.length) createClient().storage.from("edits").remove(uploads).catch(() => {});
   }
 
-  return { values, set, phone, setPhone, textMe, setTextMe, notes, setNotes, errors, formError, uploading, setUploading, busy, dirty, submit, discardUploads, form, userId };
+  return { values, set, phone, setPhone, notes, setNotes, errors, formError, uploading, setUploading, busy, dirty, submit, discardUploads, form, userId };
 }
 
 export type EditRequestState = ReturnType<typeof useEditRequest>;
@@ -132,7 +131,7 @@ function Part({ n, title, hint, children }: { n: number; title: string; hint?: s
 
 /* Every field of the request, in numbered parts. */
 export function EditRequestFields({ state }: { state: EditRequestState }) {
-  const { form, values, set, errors, userId, setUploading, notes, setNotes, phone, setPhone, textMe, setTextMe } = state;
+  const { form, values, set, errors, userId, setUploading, notes, setNotes, phone, setPhone } = state;
   let n = 0;
   return (
     <div className="space-y-8">
@@ -157,8 +156,8 @@ export function EditRequestFields({ state }: { state: EditRequestState }) {
         </Shell>
       </Part>
 
-      <Part n={++n} title="Where we reach you" hint="We'll text you when it's ready, and if we have a question.">
-        <Shell id="edit-phone" field="phone" label="Phone number" error={errors.phone} hint="Kenyan numbers can start with 07. Others need their country code (+44…).">
+      <Part n={++n} title="Where we reach you" hint="We'll message you on WhatsApp or by SMS when it's ready, or if we have a question.">
+        <Shell id="edit-phone" field="phone" label="Phone number" required error={errors.phone} hint="Your WhatsApp number is best. Kenyan numbers can start with 07; others need their country code (+44…).">
           <input
             id="edit-phone"
             type="tel"
@@ -170,10 +169,6 @@ export function EditRequestFields({ state }: { state: EditRequestState }) {
             className={inputClass(!!errors.phone)}
           />
         </Shell>
-        <label className="flex cursor-pointer items-center gap-2.5 text-sm text-foreground">
-          <input type="checkbox" checked={textMe} onChange={(e) => setTextMe(e.target.checked)} className="size-4 accent-[var(--brand)]" />
-          Text me when my edit is ready
-        </label>
       </Part>
     </div>
   );
@@ -239,7 +234,7 @@ export function RequestEditForm({
   );
 }
 
-const nextSteps = ["We get your request and start on it.", "If anything's unclear, we ask you in My edits (and by text).", "Your edited files land in My edits, ready to download."];
+const nextSteps = ["We get your request and start on it.", "If anything's unclear, we message you and ask in My edits.", "Your edited files land in My edits, and we message you that they're ready."];
 
 export function NextSteps({ className = "rounded-2xl border border-black/[0.06] bg-card p-4 dark:border-white/10" }: { className?: string }) {
   return (

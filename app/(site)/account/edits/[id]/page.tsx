@@ -58,7 +58,7 @@ export default async function EditRequestPage({ params, searchParams }: PageProp
           <CheckIcon className="mt-0.5 size-4 shrink-0 text-brand" />
           <span>
             Request sent. We&apos;ll put the finished files here
-            {request.textMe && request.phone ? ` and text ${formatPhone(request.phone)} when they're ready` : ""}.
+            {request.phone ? ` and message you at ${formatPhone(request.phone)} when they're ready` : ""}.
           </span>
         </p>
       )}

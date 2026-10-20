@@ -7,7 +7,7 @@ import { contentClient } from "./content-client";
 // plan_allowances and my_allowance() come with migration 016. Until it's run there are no limits to show.
 const NOT_SET_UP = new Set(["PGRST205", "PGRST202", "42P01", "42883"]);
 
-const PLAN_ORDER: PlanSlug[] = ["warm-up", "resident", "headliner"];
+const PLAN_ORDER: PlanSlug[] = ["warm-up", "resident", "headliner", "lifetime"];
 
 type Row = { plan: PlanSlug; downloads: number | null; edits: number | null; open_edits: number | null; period: string };
 

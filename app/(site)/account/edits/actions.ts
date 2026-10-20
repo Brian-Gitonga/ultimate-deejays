@@ -19,7 +19,6 @@ export type EditInput = {
   values: Record<string, { value: string; name?: string }>;
   notes: string;
   phone: string;
-  textMe: boolean;
 };
 
 export type RequestEditResult = { ok: true; id: string } | { ok: false; error: string; fieldErrors?: Record<string, string> };
@@ -40,7 +39,7 @@ export async function requestEdit(input: EditInput): Promise<RequestEditResult> 
   if (!checked.ok) Object.assign(fieldErrors, checked.errors);
   const phone = normalizePhone(String(input.phone ?? ""));
   if (phone === null) fieldErrors.phone = "Enter your number like 0712 345 678, or with its country code (+44…).";
-  else if (input.textMe && !phone) fieldErrors.phone = "Add your number so we can text you.";
+  else if (!phone) fieldErrors.phone = "Add your number so we can let you know when it's ready.";
   const notes = String(input.notes ?? "").trim();
   if (notes.length > 2000) fieldErrors.notes = "Keep your notes under 2,000 characters.";
   if (Object.keys(fieldErrors).length || !checked.ok) return { ok: false, error: "Check the highlighted fields.", fieldErrors };
@@ -51,7 +50,8 @@ export async function requestEdit(input: EditInput): Promise<RequestEditResult> 
     answers: checked.answers,
     notes,
     phone: phone ?? "",
-    text_me: !!input.textMe && !!phone,
+    // The team messages them on this number (WhatsApp or SMS) when it's ready.
+    text_me: !!phone,
   });
   if (error) {
     console.error("[requestEdit]", error.message);
